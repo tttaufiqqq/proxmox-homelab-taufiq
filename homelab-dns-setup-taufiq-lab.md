@@ -342,6 +342,8 @@ In the Tailscale admin panel at `https://login.tailscale.com/admin/dns`:
 4. Entered `taufiq.lab`
 5. Saved
 
+![Tailscale admin panel — adding taufiq.lab Split DNS nameserver pointing to dnsmasq on Proxmox (100.97.8.93)](configuring-dns.png)
+
 **What this does:**
 Tailscale's coordination server pushes this DNS rule to every device on the tailnet. When any device tries to resolve `*.taufiq.lab`, Tailscale intercepts the query and forwards it to `100.97.8.93` instead of the default resolver.
 

@@ -154,11 +154,15 @@ Rather than accepting Anaconda's automatic partitioning, a manual layout was use
 
 All LVM volumes share a single volume group (`ol`) with 0 B free, fully allocated.
 
+![Manual partitioning summary — partition layout during Oracle Linux installation](manual-partioning.png)
+
 > **Note:** the RPM-based 23ai Free installer defaults to `/opt/oracle` regardless of this partitioning. `/u01` and `/u02` are currently unused. See [Future Work](#future-work) for a planned fix.
 
 ### 0.4 — Software selection
 
 Base environment: **Server** (headless, no GUI). Chosen over "Server with GUI" to avoid unnecessary desktop-environment overhead on a database VM managed entirely via SSH.
+
+![Oracle Linux software selection — Server base environment with Development Tools checked](<oracle linux installation.png>)
 
 ---
 
