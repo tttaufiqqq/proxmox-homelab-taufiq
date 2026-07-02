@@ -707,21 +707,49 @@ su - root -c 'su - oracle -s /bin/bash /tmp/fix_oracle.sh'
 # Enter root password: qwertY@1612
 ```
 
-#### What to Do After Every Oracle VM Reboot
+#### Persistent Fix Applied: local_listener Parameter
 
-1. Wait ~60 seconds after the VM finishes booting, then try DBeaver.
-2. If `ORA-12514` appears, run `ALTER SYSTEM REGISTER` as sysdba:
+The default oracle-free-23ai installation sets `local_listener = LISTENER_FREE` — a TNS alias. Without a `tnsnames.ora` file to resolve this alias, PMON cannot locate the listener and never registers the `FREE` or `FREEPDB1` services. `lsnrctl status` shows "The listener supports no services" and `ALTER SYSTEM REGISTER` appears to succeed but has no effect.
+
+**One-time fix (already applied, persists across reboots):**
 
 ```bash
-ssh linux-oracle-db@100.118.110.114
-su - root          # password: qwertY@1612
-su - oracle
+# As oracle OS user:
 sqlplus / as sysdba
+SQL> ALTER SYSTEM SET local_listener = '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' SCOPE=BOTH;
 SQL> ALTER SYSTEM REGISTER;
 SQL> EXIT;
 ```
 
-3. Retry DBeaver — should connect immediately.
+`SCOPE=BOTH` writes to both the running instance and the spfile — the parameter survives reboots. This was applied on 2 July 2026 and does not need to be repeated unless the database is rebuilt from scratch.
+
+After applying: all four services registered immediately:
+```
+Service "FREE"     has 1 instance(s). Instance "FREE", status READY  ← CDB
+Service "freepdb1" has 1 instance(s). Instance "FREE", status READY  ← PDB
+Service "FREEXDB"  has 1 instance(s). Instance "FREE", status READY
+```
+
+DBeaver connected successfully: **Connected (714 ms)** — Oracle Database 23ai Free Release 23.0.0.0.0, Version 23.7.0.25.01.
+
+#### What to Do After Every Oracle VM Reboot
+
+The `local_listener` fix is now permanent. After a reboot, PMON will auto-register services within ~60 seconds. No manual intervention is needed unless the VM reboots and you try to connect within that first minute.
+
+1. Boot the VM and wait ~60 seconds.
+2. Try DBeaver — it should connect without any manual steps.
+3. If `ORA-12514` still appears after 60 seconds, force immediate registration:
+
+```bash
+ssh -F /dev/null -i ~/.ssh/id_ed25519 linux-oracle-db@100.118.110.114
+# (BOM in SSH config — use -F /dev/null to bypass it)
+echo 'qwertY@1612' | su -s /bin/bash - root -c 'su -s /bin/bash - oracle -c "
+  export ORACLE_HOME=/opt/oracle/product/23ai/dbhomeFree
+  export ORACLE_SID=FREE
+  export PATH=\$ORACLE_HOME/bin:\$PATH
+  sqlplus / as sysdba <<< \"ALTER SYSTEM REGISTER; EXIT;\"
+"'
+```
 
 #### Listener Status Check
 
@@ -729,16 +757,16 @@ SQL> EXIT;
 # As oracle OS user:
 lsnrctl status
 
-# Key output to look for:
+# Expected output (healthy state):
 # Service "FREE" has 1 instance(s).
 #   Instance "FREE", status READY, has 1 handler(s) for this service...
-# Service "FREEPDB1" has 1 instance(s).
+# Service "freepdb1" has 1 instance(s).
+#   Instance "FREE", status READY, has 1 handler(s) for this service...
+# Service "FREEXDB" has 1 instance(s).
 #   Instance "FREE", status READY, has 1 handler(s) for this service...
 ```
 
-If you see the service lines, the listener is ready and DBeaver can connect.
-
-If you see "The listener supports no services", PMON hasn't registered yet — run `ALTER SYSTEM REGISTER`.
+If you see "The listener supports no services" **and** the database has been running for more than 60 seconds, the `local_listener` parameter may have been reset. Run the persistent fix again (see above).
 
 #### DBeaver Connection Settings
 
@@ -1034,44 +1062,52 @@ After the listener started, the error progressed to ORA-12514 (listener running,
 
 ### Problem 8 — Oracle ORA-12514: listener running but service not registered
 
-**Symptom:** DBeaver showed `ORA-12514: TNS:listener does not currently know of service requested in connect descriptor` when connecting to service name `FREE`.
+**Symptom:** DBeaver showed `ORA-12514: TNS:listener does not currently know of service requested in connect descriptor` when connecting to service name `FREE`. `ALTER SYSTEM REGISTER` ran without error but had no effect — `lsnrctl status` continued to show "The listener supports no services."
 
-**Root cause:** The Oracle listener was running, but the `FREE` service had not yet been registered with it. On startup, Oracle's PMON (Process Monitor) background process automatically registers the database services with the listener, but this takes **30–60 seconds** after the database instance finishes mounting. If DBeaver connects during that window, the listener has no knowledge of the `FREE` service.
+**Root cause (deeper than PMON timing):** The default oracle-free-23ai package sets the `local_listener` database parameter to `LISTENER_FREE`, which is a TNS alias. Oracle's PMON process resolves this alias by looking in `tnsnames.ora` to find the listener's actual network address. However, `tnsnames.ora` does not exist in this installation:
 
-**Fix — force immediate registration:**
+```
+/opt/oracle/product/23ai/dbhomeFree/network/admin/tnsnames.ora  ← FILE NOT FOUND
+```
+
+With no `tnsnames.ora`, PMON cannot resolve `LISTENER_FREE` → cannot locate the listener → never sends registration → listener shows "The listener supports no services" indefinitely, regardless of how many times `ALTER SYSTEM REGISTER` is run.
+
+**Diagnosis:**
+```sql
+SHOW PARAMETER local_listener;
+-- NAME           TYPE    VALUE
+-- local_listener string  LISTENER_FREE   ← TNS alias, not a real address
+```
+
+**Fix — set local_listener to the explicit TCP address (SCOPE=BOTH persists across reboots):**
 
 ```bash
-# Must be oracle OS user (not linux-oracle-db, not root)
-ssh linux-oracle-db@100.118.110.114
-su - root          # password: qwertY@1612
-su - oracle
-
-# Set Oracle environment
-export ORACLE_HOME=/opt/oracle/product/23ai/dbhomeFree
-export ORACLE_SID=FREE
-export PATH=$ORACLE_HOME/bin:$PATH
-
-# Connect as sysdba and force service registration
+# As oracle OS user:
 sqlplus / as sysdba
+
+SQL> ALTER SYSTEM SET local_listener = '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' SCOPE=BOTH;
+System altered.
 
 SQL> ALTER SYSTEM REGISTER;
 System altered.
 
 SQL> EXIT;
 
-# Verify listener now sees the service
+# Verify — should now show services:
 lsnrctl status | grep -E "Service|READY"
 # Service "FREE" has 1 instance(s).
 #   Instance "FREE", status READY, has 1 handler(s)
+# Service "freepdb1" has 1 instance(s).
+#   Instance "FREE", status READY, has 1 handler(s)
 ```
 
-After this, DBeaver connected immediately.
+**Result:** DBeaver connected — **Connected (714 ms)**, Oracle Database 23ai Free 23.7.0.25.01.
+
+**Why `SCOPE=BOTH`?** `SCOPE=MEMORY` only fixes the current session — the parameter reverts on reboot. `SCOPE=BOTH` writes to the spfile, so the correct `local_listener` value is preserved permanently.
 
 **Why can't linux-oracle-db user run sqlplus / as sysdba?**
 
 The `linux-oracle-db` OS user is not a member of the `dba` group (which grants OS-level SYSDBA authentication). `/ as sysdba` uses OS group membership — if the user is not in `dba`, Oracle rejects it with ORA-01017 even though there is no password prompt. The `oracle` OS user is in the `dba` group, so it can connect as sysdba without a password.
-
-**Key lesson:** After every Oracle VM reboot, either wait 60+ seconds before trying DBeaver, or run `ALTER SYSTEM REGISTER` as oracle/sysdba to force immediate service registration.
 
 ---
 
@@ -1210,26 +1246,31 @@ Symptom:
   ORA-12514: TNS:listener does not currently know of service
              requested in connect descriptor
 
-Cause: Oracle PMON has not yet registered the FREE service with the
-       listener. This takes 30-60 seconds after DB startup.
+Most likely cause A: PMON timing (first ~60 seconds after boot)
+  PMON auto-registers services within 60 seconds of DB startup.
+  Just wait and retry — no action needed.
 
-Quick check:
-  ssh linux-oracle-db@100.118.110.114
-  su - root          # password: qwertY@1612
-  su - oracle
+Most likely cause B: local_listener misconfigured (deeper issue)
+  The local_listener parameter is set to a TNS alias (e.g. LISTENER_FREE)
+  but tnsnames.ora does not exist, so PMON cannot resolve the alias and
+  never sends registration to the listener.
+
+  Diagnose:
+    sqlplus / as sysdba
+    SHOW PARAMETER local_listener;
+    -- If value is "LISTENER_FREE" (not an address), this is the cause.
+
+  Permanent fix (already applied on this server):
+    ALTER SYSTEM SET local_listener =
+      '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' SCOPE=BOTH;
+    ALTER SYSTEM REGISTER;
+    -- SCOPE=BOTH writes to spfile — survives reboots
+
+  If the parameter was reset (e.g. after DB rebuild), reapply the fix.
+
+Verify listener is ready:
   lsnrctl status | grep "Service"
-  # If no "Service" lines: PMON not registered yet
-
-Fix (force registration):
-  ORACLE_HOME=/opt/oracle/product/23ai/dbhomeFree
-  ORACLE_SID=FREE
-  PATH=$ORACLE_HOME/bin:$PATH
-  sqlplus / as sysdba
-  SQL> ALTER SYSTEM REGISTER;
-  SQL> EXIT;
-  Then retry DBeaver.
-
-Alternative: wait 60 seconds and retry without manual intervention.
+  # Must show: Service "FREE" has 1 instance(s).
 ```
 
 ### Oracle ORA-12541 after VM reboot (listener not running)
