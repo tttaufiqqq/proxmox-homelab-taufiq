@@ -59,9 +59,13 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
 **What changed on this VM as a result:**
 
 1. **Java 17 → 21** (see table above) — required by GLM's `pom.xml`.
-2. **`springapp-dev.service` and `cloudflared-dev.service` disabled and stopped**
-   (`systemctl disable --now`). Left in place (not deleted) in case dev hosting is
-   ever needed here again — just not auto-starting.
+2. **`springapp-dev.service` and `cloudflared-dev.service` removed entirely** —
+   initially just disabled+stopped, then fully deleted the same day per an explicit
+   "no dev at all on this VM" decision: the unit files, `/etc/springapp-dev.env`,
+   `~/.cloudflared/dev.yml` and its tunnel credential JSON, and the now-empty
+   `/opt/springapp/dev` directory are all gone. Verified 2026-07-14: `systemctl
+   list-units` shows only `springapp-prod` and `cloudflared-prod`. Dev only ever
+   runs from the primary workstation now — nothing dev-related lives on this VM.
 3. **Nginx installed**, serving GLM's built SPA and reverse-proxying to the prod
    Spring Boot instance. Config lives at `/etc/nginx/sites-available/glm-prod`
    (symlinked into `sites-enabled`; the default nginx site was removed). It's a
@@ -120,9 +124,11 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
 
 ## Directory Structure
 
+Dev artifacts (`dev/` dir, dev env file, dev systemd units, dev tunnel config/creds)
+were fully removed 2026-07-14 — this VM is prod-only, no dev remnants anywhere:
+
 ```
 /opt/springapp/
-├── dev/                        <- development environment (unused as of 2026-07-14 — dev is not hosted on this VM)
 ├── prod/                       <- production environment (port 8081) — empty, code not yet deployed
 └── setup-oracle-jdbc.sh        <- re-run this if server is reprovisioned
 
@@ -135,28 +141,19 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
 └── sites-enabled/glm-prod      <- symlink; default site removed
 
 /var/log/springapp/
-├── dev.log
-├── dev-error.log
 ├── prod.log
-├── prod-error.log
-├── tunnel-dev.log
-└── tunnel-prod.log
+└── prod-error.log
 
 /etc/
-├── springapp-dev.env           <- DB credentials for dev (chmod 600)
 └── springapp-prod.env          <- DB credentials for prod (chmod 600)
 
 /etc/systemd/system/
-├── springapp-dev.service       <- Spring Boot DEV (port 8080)
 ├── springapp-prod.service      <- Spring Boot PROD (port 8081)
-├── cloudflared-dev.service     <- Tunnel for DEV (auto-start on boot)
 └── cloudflared-prod.service    <- Tunnel for PROD (auto-start on boot)
 
 ~/.cloudflared/
 ├── cert.pem                    <- Cloudflare account certificate
-├── dev.yml                     <- Named tunnel config for DEV
-├── prod.yml                    <- Named tunnel config for PROD
-├── 6a9cf731-...json            <- DEV tunnel credentials (keep secret)
+├── prod.yml                    <- Named tunnel config for PROD (points at nginx :80)
 └── bf9aa8be-...json            <- PROD tunnel credentials (keep secret)
 
 ~/.m2/repository/com/oracle/database/jdbc/ojdbc11/23.3.0/
@@ -180,12 +177,12 @@ Named tunnels — these never change regardless of VM restarts.
 
 | Environment | URL | Ingress target |
 |---|---|---|
-| DEV | `https://6a9cf731-a20d-496c-b6e9-a42f5d23f24d.cfargotunnel.com` | disabled 2026-07-14 — service stopped, tunnel not running |
+| DEV | `https://6a9cf731-a20d-496c-b6e9-a42f5d23f24d.cfargotunnel.com` | removed 2026-07-14 — local config/credentials deleted from this VM (not hosted here at all now); the tunnel object itself still exists in the Cloudflare account, just unused |
 | PROD | `https://bf9aa8be-4ab6-4028-ad63-bfd5e25aff00.cfargotunnel.com` | `http://localhost:80` (nginx) — changed 2026-07-14, was `:8081` direct |
 
 Tunnels are managed by systemd and auto-start on boot:
 ```bash
-sudo systemctl status cloudflared-prod   # dev tunnel is disabled, see Prod-Only Deployment above
+sudo systemctl status cloudflared-prod   # this VM only ever runs the prod tunnel now
 ```
 
 ---
@@ -193,27 +190,31 @@ sudo systemctl status cloudflared-prod   # dev tunnel is disabled, see Prod-Only
 ## Security
 
 ### Firewall (UFW)
-Only SSH (port 22) is open inbound. App ports 8080 and 8081 are intentionally blocked — all public traffic goes through Cloudflare Tunnel only.
+Only SSH (port 22) is open inbound. Port 8081 (prod's Spring Boot port) is intentionally blocked — all public traffic goes through Cloudflare Tunnel → nginx only.
 
 ```bash
 sudo ufw status verbose
 ```
 
 ### Secrets Management
-DB credentials are stored in env files, not in the codebase. The systemd services load them via `EnvironmentFile`.
+DB credentials are stored in env files, not in the codebase. The systemd service loads them via `EnvironmentFile`.
 
 ```
-/etc/springapp-dev.env   (chmod 600 — root read only)
-/etc/springapp-prod.env  (chmod 600 — root read only)
+/etc/springapp-prod.env  (chmod 600 — root read only; springapp-dev.env removed 2026-07-14)
 ```
 
-Both `application-dev.properties` and `application-prod.properties` are in `.gitignore` and must never be committed to GitHub.
+`application-prod.yml` (and any local `application-dev.yml`) are in `.gitignore` and must never be committed to GitHub.
 
 ---
 
 ## Environment Setup
 
 ### Dev vs Prod Profiles
+
+The profile split below is a general template for how this pattern works — on this
+VM specifically, only the prod side exists (dev runs on the primary workstation, see
+[Prod-Only Deployment](#prod-only-deployment-glm-2026-07-14) above). Kept here for
+reference in case another project is hosted here later.
 
 Create these files inside your project under `src/main/resources/`:
 
