@@ -1,5 +1,5 @@
 # Spring Boot App Server Setup
-**Server:** `spring-boot-app` (Ubuntu 24.04.4 LTS — corrected 2026-07-14; previously documented as 22.04)
+**Server:** `spring-boot-app`, VM ID `103` (Ubuntu 24.04.4 LTS — corrected 2026-07-14; previously documented as 22.04)
 **IP:** `100.120.243.96` Tailscale (stable — use this one) / `192.168.0.105` local LAN (DHCP, **not static**
 — confirmed via `hostname -I` on 2026-07-14, will drift on reboot and can collide with other VMs' DHCP
 leases). Corrected 2026-07-14: this VM is a distinct Tailscale node named `spring-boot-app`, separate from
@@ -19,8 +19,8 @@ listed here was never reachable and appears to have been a typo. Always use the 
 
 The plan for this server is to remake an old PHP plus MySQL project as
 Spring Boot plus Oracle, mainly as an experiment to compare performance
-between the two stacks. This server hosts the rewritten app — [Green Lifestyle
-Market](https://github.com/) (`green-lifestyle-market` repo) — and the
+between the two stacks. This server hosts the rewritten app —
+[`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market) — and the
 `linux-oracle-db` VM documented in
 [`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md) is
 the database backend it connects to.
@@ -290,33 +290,27 @@ ssh spring-boot-app@100.120.243.96   # Tailscale IP — corrected 2026-07-14, se
 
 ### First-time clone (once code is ready)
 
+Prod only — `/opt/springapp/dev` exists but is unused (dev runs on the workstation, see above):
+
 ```bash
-sudo -u springapp git clone https://github.com/YOUR_REPO_URL /opt/springapp/dev
-sudo -u springapp git clone https://github.com/YOUR_REPO_URL /opt/springapp/prod
+sudo -u springapp git clone https://github.com/tttaufiqqq/green-lifestyle-market /opt/springapp/prod
 sudo chown -R springapp:springapp /opt/springapp/
 ```
 
-Then add the properties files (these are gitignored — create them manually on the server):
+Then add the prod properties/env file (gitignored — create it manually on the server):
 ```bash
-sudo nano /opt/springapp/dev/src/main/resources/application-dev.properties
-sudo nano /opt/springapp/prod/src/main/resources/application-prod.properties
+sudo nano /opt/springapp/prod/src/main/resources/application-prod.yml
 ```
 
-Then enable and start the app services:
+Then enable and start the prod service:
 ```bash
-sudo systemctl enable springapp-dev springapp-prod
-sudo systemctl start springapp-dev springapp-prod
+sudo systemctl enable springapp-prod
+sudo systemctl start springapp-prod
 ```
 
 ### Pull latest code and restart
 
 ```bash
-# Dev
-cd /opt/springapp/dev
-git pull origin main
-sudo systemctl restart springapp-dev
-
-# Prod
 cd /opt/springapp/prod
 git pull origin main
 sudo systemctl restart springapp-prod
@@ -325,16 +319,13 @@ sudo systemctl restart springapp-prod
 ### Check app logs
 
 ```bash
-tail -f /var/log/springapp/dev.log
 tail -f /var/log/springapp/prod.log
 ```
 
 ### Check service status
 
 ```bash
-sudo systemctl status springapp-dev --no-pager
 sudo systemctl status springapp-prod --no-pager
-sudo systemctl status cloudflared-dev --no-pager
 sudo systemctl status cloudflared-prod --no-pager
 ```
 
@@ -342,11 +333,6 @@ sudo systemctl status cloudflared-prod --no-pager
 
 ```bash
 # Open a tmux session first so it survives SSH disconnect
-tmux new -s dev
-cd /opt/springapp/dev
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-# Ctrl+B then D to detach
-
 tmux new -s prod
 cd /opt/springapp/prod
 mvn spring-boot:run -Dspring-boot.run.profiles=prod
@@ -355,7 +341,6 @@ mvn spring-boot:run -Dspring-boot.run.profiles=prod
 
 Reattach:
 ```bash
-tmux attach -t dev
 tmux attach -t prod
 tmux ls
 ```
@@ -381,22 +366,11 @@ sudo firewall-cmd --reload
 
 ### Oracle Schemas (run on Oracle Linux VM)
 
-Separate schemas for dev and prod prevent a bad dev migration from affecting prod data:
-
-```sql
--- Connect as sysdba
-sqlplus / as sysdba
-
-CREATE USER app_dev IDENTIFIED BY your_dev_password;
-GRANT CONNECT, RESOURCE TO app_dev;
-GRANT UNLIMITED TABLESPACE TO app_dev;
-
-CREATE USER app_prod IDENTIFIED BY your_prod_password;
-GRANT CONNECT, RESOURCE TO app_prod;
-GRANT UNLIMITED TABLESPACE TO app_prod;
-
-EXIT;
-```
+Separate schemas for dev and prod prevent a bad dev migration from affecting prod
+data — this was the plan sketched here originally, and it's now actually implemented
+as `glm_app` (prod) / `glm_app_dev` (dev), each with its own Flashback Archive. See
+[`docs/01-oracle/glm-db-access.md`](../01-oracle/glm-db-access.md) for the accounts,
+grants, and the Flyway placeholder that keeps their Flashback Archives from colliding.
 
 ---
 
@@ -422,15 +396,14 @@ bash /opt/springapp/setup-oracle-jdbc.sh
 # 4. Restore Cloudflare tunnel credentials from backup
 # (copy cert.pem and both .json credential files back to ~/.cloudflared/)
 
-# 5. Recreate env files
-sudo nano /etc/springapp-dev.env
+# 5. Recreate the prod env file (dev's is unused — see Prod-Only Deployment above)
 sudo nano /etc/springapp-prod.env
-sudo chmod 600 /etc/springapp-dev.env /etc/springapp-prod.env
+sudo chmod 600 /etc/springapp-prod.env
 
 # 6. Restore systemd services and reload
 sudo systemctl daemon-reload
-sudo systemctl enable springapp-dev springapp-prod cloudflared-dev cloudflared-prod
-sudo systemctl start cloudflared-dev cloudflared-prod
+sudo systemctl enable springapp-prod cloudflared-prod
+sudo systemctl start cloudflared-prod
 ```
 
 ---
@@ -440,13 +413,10 @@ sudo systemctl start cloudflared-dev cloudflared-prod
 | Task | Command |
 |---|---|
 | SSH into server | `ssh spring-boot-app@100.120.243.96   # Tailscale IP — corrected 2026-07-14, see header` |
-| Pull latest (dev) | `cd /opt/springapp/dev && git pull origin main` |
 | Pull latest (prod) | `cd /opt/springapp/prod && git pull origin main` |
-| Restart dev app | `sudo systemctl restart springapp-dev` |
 | Restart prod app | `sudo systemctl restart springapp-prod` |
-| Watch dev logs | `tail -f /var/log/springapp/dev.log` |
 | Watch prod logs | `tail -f /var/log/springapp/prod.log` |
-| Check all services | `sudo systemctl status springapp-dev springapp-prod cloudflared-dev cloudflared-prod` |
+| Check all services | `sudo systemctl status springapp-prod cloudflared-prod nginx` |
 | Check firewall | `sudo ufw status verbose` |
 | List tunnels | `cloudflared tunnel list` |
 | Check Oracle connectivity | `nc -zv linux-oracle-db.taufiq.lab 1521` (or `100.118.110.114`) |
@@ -459,8 +429,8 @@ sudo systemctl start cloudflared-dev cloudflared-prod
 - `mvn spring-boot:run` requires a valid `pom.xml` with the Spring Boot plugin in the project directory. Running it outside a Spring Boot project throws `No plugin found for prefix 'spring-boot'`.
 - The ojdbc11 jar is not on Maven Central. It was manually downloaded from Oracle and installed into the local Maven repo. Use `setup-oracle-jdbc.sh` to reinstall if needed.
 - Named Cloudflare tunnels are permanent — URLs do not change on restart. Managed by systemd, they auto-start on boot.
-- Both `dev` and `prod` connect to the same Oracle DB VM but use separate Oracle schemas (`app_dev` / `app_prod`) to isolate data.
-- Do not commit `application-dev.properties` or `application-prod.properties` to GitHub. They are gitignored and must be created manually on the server.
+- Dev (workstation) and prod (this VM) connect to the same Oracle DB VM but use separate schemas — `glm_app_dev` / `glm_app` — to isolate data. See [`docs/01-oracle/glm-db-access.md`](../01-oracle/glm-db-access.md).
+- Do not commit `application-dev.yml`, `application-prod.yml`, or `.env` to GitHub. They are gitignored and must be created manually.
 
 ---
 
