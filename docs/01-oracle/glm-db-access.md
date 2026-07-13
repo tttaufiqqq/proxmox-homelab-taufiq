@@ -22,8 +22,27 @@ not just a filter. To browse this project's data:
 
 | User | Role | Password | Use |
 |---|---|---|---|
-| `glm_app` | Schema owner | rotated, not recorded here | App runtime only (Spring Boot's `DB_USER`/`DB_PASSWORD`) |
-| `glm_dev` | Interactive/DBA | `GlmDev_Ora26Q3` | Personal DBeaver login for browsing/admin work — added 2026-07-14 |
+| `glm_app` | **Prod** schema owner | rotated, not recorded here | Deployed app only (`spring-boot-app` VM, port 8081) — 44 real tables, has `GLM_FDA` |
+| `glm_app_dev` | **Dev** schema owner | `GlmAppDev_Ora26Q1` | Local dev/IT tests only, from the workstation — has `GLM_FDA_DEV` |
+| `glm_dev` | Interactive/DBA (human) | `GlmDev_Ora26Q3` | Personal DBeaver login for browsing/admin work — added 2026-07-14 |
+
+## Dev/prod split (2026-07-14)
+
+`backend/src/test/java/.../MigrationIT.java` drops and recreates its target schema
+on every run. It used to point at `glm_app` — the same schema the deployed app now
+uses in prod, with real migrated data. Running the IT suite locally would have
+wiped it. Fixed by giving dev its own schema, `glm_app_dev`, and repointing the test
+and `backend/.env` at it instead.
+
+This also surfaced a second problem: `V6__content_notify_audit.sql` hardcoded
+`CREATE FLASHBACK ARCHIVE glm_fda` — but FDA names are unique per PDB, not
+per-schema, so `glm_app_dev` running the same migration would collide with prod's
+archive. Fixed by parameterizing the name via a Flyway placeholder
+(`flashback-archive-name`): `glm_fda` for prod, `glm_fda_dev` for dev — set in
+`application.yml` / `application-dev.yml` respectively.
+
+Verified afterward: `mvn verify -Dtest=MigrationIT` passes against `glm_app_dev`,
+and prod's `glm_app` (44 tables) and `GLM_FDA` were confirmed untouched.
 
 **Why a separate `glm_dev` account instead of reusing `glm_app` or `sys`:**
 - **Attribution** — `glm_app` covers both app traffic and human edits
