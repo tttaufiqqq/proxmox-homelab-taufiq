@@ -1442,9 +1442,9 @@ Quick reference for setting up all connections in DBeaver.
   Oracle note            : @ is illegal in Oracle passwords — use qwertY1612
 
   Related docs:
-    homelab-dns-setup-taufiq-lab.md   — full DNS infrastructure setup
-    ../Animal-Shelter-Workshop/CLAUDE.md — DB connection mapping per module
-    ../Animal-Shelter-Workshop/README.md — DB architecture overview
+    ../02-dns/dns-setup.md   — full DNS infrastructure setup
+    ../../../Animal-Shelter-Workshop/CLAUDE.md — DB connection mapping per module
+    ../../../Animal-Shelter-Workshop/README.md — DB architecture overview
 
 +==============================================================================+
 ```
