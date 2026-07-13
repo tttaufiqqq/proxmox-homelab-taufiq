@@ -17,7 +17,11 @@ sanitized tutorial.
 | Component | Value |
 |---|---|
 | Hostname | taufiq |
-| OS | Proxmox VE |
+| OS | Proxmox VE 9.1.1 |
+| CPU | Intel Core i5-6600T @ 2.70GHz (4 cores) |
+| RAM | 7.65 GiB |
+| Storage | 225.19 GiB |
+| Kernel | Linux 6.17.2-1-pve |
 | Local IP | 192.168.0.10 |
 | Tailscale IP | 100.97.8.93 |
 
