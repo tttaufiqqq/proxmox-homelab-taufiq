@@ -3,6 +3,15 @@
 **IP:** `192.168.0.101`
 **Purpose:** Development and production host for Spring Boot app with Oracle DB backend
 
+## Why This Exists
+
+The plan for this server is to remake an old PHP plus MySQL project as
+Spring Boot plus Oracle, mainly as an experiment to compare performance
+between the two stacks. This server hosts the rewritten app, and the
+`linux-oracle-db` VM documented in
+[`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md) is
+the database backend it connects to.
+
 ---
 
 ## What's Installed
@@ -257,10 +266,12 @@ tmux ls
 
 ## Oracle DB Connectivity Check
 
-Before running the app, verify the Oracle Linux VM is reachable on port 1521:
+Before running the app, verify the Oracle Linux VM (`linux-oracle-db`, see
+[`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md)) is
+reachable on port 1521:
 
 ```bash
-nc -zv ORACLE_VM_IP 1521
+nc -zv linux-oracle-db.taufiq.lab 1521
 ```
 
 If it times out, run this on the Oracle Linux VM:
@@ -336,7 +347,7 @@ sudo systemctl start cloudflared-dev cloudflared-prod
 | Check all services | `sudo systemctl status springapp-dev springapp-prod cloudflared-dev cloudflared-prod` |
 | Check firewall | `sudo ufw status verbose` |
 | List tunnels | `cloudflared tunnel list` |
-| Check Oracle connectivity | `nc -zv ORACLE_VM_IP 1521` |
+| Check Oracle connectivity | `nc -zv linux-oracle-db.taufiq.lab 1521` (or `100.118.110.114`) |
 | Reinstall ojdbc11 | `bash /opt/springapp/setup-oracle-jdbc.sh` |
 
 ---
@@ -348,3 +359,10 @@ sudo systemctl start cloudflared-dev cloudflared-prod
 - Named Cloudflare tunnels are permanent — URLs do not change on restart. Managed by systemd, they auto-start on boot.
 - Both `dev` and `prod` connect to the same Oracle DB VM but use separate Oracle schemas (`app_dev` / `app_prod`) to isolate data.
 - Do not commit `application-dev.properties` or `application-prod.properties` to GitHub. They are gitignored and must be created manually on the server.
+
+---
+
+## Related Docs
+
+- [`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md): how the Oracle backend this app connects to was built
+- [`docs/02-dns/dns-setup.md`](../02-dns/dns-setup.md): where `linux-oracle-db.taufiq.lab` and other lab hostnames come from

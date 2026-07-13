@@ -62,15 +62,20 @@ Full inventory, client machines, and DNS naming conventions live in
 
 ## Documentation, in Build Order
 
-Read these in order and you're watching the lab get built, one working
-piece at a time.
+A quick note on scope before you read these. The MariaDB, MySQL, PostgreSQL,
+and SQL Server VMs already existed before this repo started, each one
+dedicated to a single engine, powered on when I need it and off otherwise
+(the Proxmox host only has 4 cores and 7.65 GiB of RAM, so idle VMs stay
+off). Oracle is the only engine that gets a full install log here because
+it was by far the hardest of the five to get working. The others went
+smoothly enough that there was nothing worth writing up.
 
 | # | Doc | Covers |
 |---|---|---|
 | 01 | [`docs/01-oracle/oracle-install.md`](docs/01-oracle/oracle-install.md) | Installing Oracle Database 23ai Free on a Proxmox VM (Oracle Linux 8), full troubleshooting log |
 | 02 | [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md) | Self-hosted DNS for the lab: dnsmasq plus Tailscale Split DNS, SSH config automation |
-| 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Connecting DBeaver to all five database engines over Tailscale and DNS |
-| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (dev and prod) backed by Oracle, with Cloudflare Tunnel for public access |
+| 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Using DBeaver as one place to manage all five engines: connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
+| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (dev and prod), currently the planned host for a rewrite of an old PHP plus MySQL project into Spring Boot plus Oracle, mainly to compare performance between the two stacks |
 
 ---
 

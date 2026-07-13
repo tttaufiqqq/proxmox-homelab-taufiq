@@ -2,6 +2,8 @@
 
 A step-by-step, real-world documented install of Oracle Database 23ai Free on Oracle Linux 8, running as a Proxmox VM and secured over a Tailscale private mesh network. This is part of a larger multi-database homelab workshop (PostgreSQL, MariaDB, MySQL, SQL Server, Oracle) used for hands-on DBA and infrastructure learning.
 
+The other four VMs (PostgreSQL, MariaDB, MySQL, SQL Server) were already up and running before this document was written, each one hosting a single engine and powered off when not in use. Oracle is the only one documented in full here because, of the five, it was by far the hardest to get working.
+
 This document is written as an honest troubleshooting log, not a sanitized tutorial. Every error encountered, its root cause, and the actual fix applied are documented in full, including the wrong turns, because that's usually the part tutorials skip and the part that's actually useful.
 
 ---
@@ -400,6 +402,8 @@ sqlplus / as sysdba
 SQL> ALTER SYSTEM REGISTER;
 ```
 
+> **Follow-up:** `ALTER SYSTEM REGISTER` fixes registration for the current session, but it did not survive a VM reboot. The permanent fix (setting `local_listener` to an explicit TCP address instead of a TNS alias) was found later while setting up DBeaver, and is documented in [`docs/03-dbeaver/dbeaver-connectivity.md`, section 6.5](../03-dbeaver/dbeaver-connectivity.md#65-oracle-23ai-free-linux-oracle-db).
+
 ---
 
 ## Phase 10: Firewall Hardening
@@ -515,6 +519,14 @@ Both connections verified successfully from DBeaver Community over the Tailscale
 - [ ] Configure RMAN backup jobs and practice restore scenarios
 - [ ] Integrate `laravel_app` into a real Laravel project via `yajra/laravel-oci8` and compare developer experience against the existing PostgreSQL/MySQL workshop VMs
 - [ ] Document AWR/performance monitoring basics once workload testing begins
+
+---
+
+## Related Docs
+
+- [`docs/02-dns/dns-setup.md`](../02-dns/dns-setup.md): how this VM got its `linux-oracle-db.taufiq.lab` hostname
+- [`docs/03-dbeaver/dbeaver-connectivity.md`, section 6.5](../03-dbeaver/dbeaver-connectivity.md#65-oracle-23ai-free-linux-oracle-db): DBeaver setup, plus the permanent listener fix that follows up on Phase 9 above
+- [`docs/04-spring-boot/spring-boot-setup.md`](../04-spring-boot/spring-boot-setup.md): the app server that uses this VM as its database backend
 
 ---
 

@@ -28,7 +28,9 @@
 
 ## 1. Overview
 
-This document describes how DBeaver (database GUI client) was configured to connect to all six database servers in the homelab. The connections work over **Tailscale VPN** using **taufiq.lab DNS hostnames** — no SSH tunnels, no port forwarding, no exposed public ports.
+With five different DBMS engines running across the homelab, switching between five different native clients (or five different CLI tools) got old fast, especially since VMs get powered on and off depending on what I'm working on that day. DBeaver was chosen because it supports nearly every engine running on Proxmox (PostgreSQL, MariaDB, MySQL, Oracle, SQL Server) from a single interface, so navigating between databases is just a matter of switching connections in one tool rather than switching tools entirely.
+
+This document describes how DBeaver (database GUI client) was configured to connect to all six database servers in the homelab. The connections work over **Tailscale VPN** using **taufiq.lab DNS hostnames** — no SSH tunnels, no port forwarding, no exposed public ports. Every connection is also configured to fall back to the raw Tailscale IP, so a database is reachable by DNS name or by IP interchangeably (see the [Connection Summary Card](#10-connection-summary-card) for both, per engine).
 
 The homelab runs five different database engines across six separate machines:
 
@@ -608,6 +610,8 @@ Password        : password    (root — different from others, historical)
 ---
 
 ### 6.5 Oracle 23ai Free (linux-oracle-db)
+
+> This section follows on from the original install in [`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md), specifically Phase 9. The `local_listener` fix below is the permanent version of the workaround documented there.
 
 **Server:** linux-oracle-db.taufiq.lab (100.118.110.114)
 **Engine:** Oracle Database 23ai Free
