@@ -48,7 +48,7 @@ tutorial would be.
 
 | VM ID | Name | OS | Local IP | Tailscale IP | Engine |
 |---|---|---|---|---|---|
-| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | (general purpose — offline as of 2026-07-14) |
+| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts `Dev/Animal-Shelter-Workshop` (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use) |
 | 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 |
 | 104 | linux-mysql | Ubuntu 24.04 | 192.168.0.103 | 100.115.237.93 | MySQL 8.0 |
 | 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 |
@@ -78,6 +78,7 @@ smoothly enough that there was nothing worth writing up.
 | # | Doc | Covers |
 |---|---|---|
 | 01 | [`docs/01-oracle/oracle-install.md`](docs/01-oracle/oracle-install.md) | Installing Oracle Database 23ai Free on a Proxmox VM (Oracle Linux 8), full troubleshooting log |
+| 01b | [`docs/01-oracle/glm-db-access.md`](docs/01-oracle/glm-db-access.md) | Green Lifestyle Market project: DBeaver connection fix (PDB vs CDB), the `glm_dev` account and why it's separate from the app's own DB user, and current schema health |
 | 02 | [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md) | Self-hosted DNS for the lab: dnsmasq plus Tailscale Split DNS, SSH config automation |
 | 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Using DBeaver as one place to manage all five engines: connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
 | 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (prod only as of 2026-07-14; dev runs on the primary workstation instead), hosting a rewrite of an old PHP plus MySQL project (Green Lifestyle Market) into Spring Boot plus Oracle, mainly to compare performance between the two stacks |
