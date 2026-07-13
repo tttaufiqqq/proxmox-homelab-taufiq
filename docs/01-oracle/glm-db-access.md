@@ -4,7 +4,12 @@ Quick-reference for connecting to and administering the `GLM_APP` schema
 (Green Lifestyle Market backend, `FREEPDB1` on `linux-oracle-db`). Full
 Oracle connectivity background lives in
 [`docs/03-dbeaver/dbeaver-connectivity.md`](../03-dbeaver/dbeaver-connectivity.md) —
-this doc only covers what's specific to this one project.
+this doc only covers what's specific to this one project. For how GLM is hosted,
+see [`docs/04-spring-boot/spring-boot-setup.md`](../04-spring-boot/spring-boot-setup.md).
+
+> **Scope note:** GLM is a learning project with no real users — "prod" below just
+> means "the schema the deployed copy uses," kept separate from "dev" for DBA practice
+> (isolation, blast radius, credential hygiene), not because a real outage is at stake.
 
 ## Connecting in DBeaver
 

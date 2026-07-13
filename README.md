@@ -78,10 +78,10 @@ smoothly enough that there was nothing worth writing up.
 | # | Doc | Covers |
 |---|---|---|
 | 01 | [`docs/01-oracle/oracle-install.md`](docs/01-oracle/oracle-install.md) | Installing Oracle Database 23ai Free on a Proxmox VM (Oracle Linux 8), full troubleshooting log |
-| 01b | [`docs/01-oracle/glm-db-access.md`](docs/01-oracle/glm-db-access.md) | Green Lifestyle Market project: DBeaver connection fix (PDB vs CDB), the `glm_dev` account and why it's separate from the app's own DB user, and current schema health |
 | 02 | [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md) | Self-hosted DNS for the lab: dnsmasq plus Tailscale Split DNS, SSH config automation |
 | 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Using DBeaver as one place to manage all five engines: connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
-| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (prod only as of 2026-07-14; dev runs on the primary workstation instead), hosting a rewrite of an old PHP plus MySQL project (Green Lifestyle Market) into Spring Boot plus Oracle, mainly to compare performance between the two stacks |
+| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server ("prod" only as of 2026-07-14 — dev runs on the primary workstation instead), hosting a rewrite of an old PHP plus MySQL project (Green Lifestyle Market, a learning project with no real users) into Spring Boot plus Oracle |
+| 05 | [`docs/01-oracle/glm-db-access.md`](docs/01-oracle/glm-db-access.md) | Green Lifestyle Market's database side: the DBeaver connection fix from doc 03 (PDB vs CDB), the dev/prod schema split from doc 04, the `glm_dev` DBA account, and current schema health |
 
 ---
 

@@ -6,7 +6,14 @@ leases). Corrected 2026-07-14: this VM is a distinct Tailscale node named `sprin
 the `linux-app-server` / VM101 entry in [`docs/02-dns/dns-setup.md`](../02-dns/dns-setup.md) (that entry's
 `192.168.0.102` / `100.100.123.90` is a different, currently-offline VM). The `192.168.0.101` previously
 listed here was never reachable and appears to have been a typo. Always use the Tailscale IP for this VM.
-**Purpose:** Production-only host for the Green Lifestyle Market (GLM) Spring Boot app, with Oracle DB backend
+**Purpose:** "Prod"-only host for the Green Lifestyle Market (GLM) Spring Boot app, with Oracle DB backend
+
+> **Scope note:** GLM is a learning/portfolio project — nobody actually uses this app.
+> "Prod" here just means "the one deployed, always-on copy," not a real production system with
+> real users or uptime stakes. The dev/prod schema split, Flashback Archive, and the rest of the
+> hardening in this doc are done for the DBA/ops practice, not because a real outage would hurt
+> anyone. See [`docs/01-oracle/glm-db-access.md`](../01-oracle/glm-db-access.md) for the DB side
+> of the same distinction.
 
 ## Why This Exists
 
