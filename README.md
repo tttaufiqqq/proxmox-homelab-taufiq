@@ -48,12 +48,17 @@ tutorial would be.
 
 | VM ID | Name | OS | Local IP | Tailscale IP | Engine |
 |---|---|---|---|---|---|
-| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | (general purpose) |
+| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | (general purpose — offline as of 2026-07-14) |
 | 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 |
 | 104 | linux-mysql | Ubuntu 24.04 | 192.168.0.103 | 100.115.237.93 | MySQL 8.0 |
 | 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 |
 | 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | PostgreSQL 16 |
 | 107 | linux-oracle-db | Oracle Linux 8.10 | 192.168.0.106 | 100.118.110.114 | Oracle 23ai Free |
+| — | spring-boot-app | Ubuntu 24.04.4 | 192.168.0.105 (DHCP, drifts) | 100.120.243.96 | Spring Boot (GLM prod), Nginx — added to inventory 2026-07-14, was missing here despite being a separate node from `app-server` |
+
+Note: `spring-boot-app`'s Local IP is DHCP-assigned and has been observed reusing an
+address also leased to `linux-mariadb` while that VM was off — always use the
+Tailscale IP for this node.
 
 Full inventory, client machines, and DNS naming conventions live in
 [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md#1-lab-environment-overview).
@@ -75,7 +80,7 @@ smoothly enough that there was nothing worth writing up.
 | 01 | [`docs/01-oracle/oracle-install.md`](docs/01-oracle/oracle-install.md) | Installing Oracle Database 23ai Free on a Proxmox VM (Oracle Linux 8), full troubleshooting log |
 | 02 | [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md) | Self-hosted DNS for the lab: dnsmasq plus Tailscale Split DNS, SSH config automation |
 | 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Using DBeaver as one place to manage all five engines: connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
-| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (dev and prod), currently the planned host for a rewrite of an old PHP plus MySQL project into Spring Boot plus Oracle, mainly to compare performance between the two stacks |
+| 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server (prod only as of 2026-07-14; dev runs on the primary workstation instead), hosting a rewrite of an old PHP plus MySQL project (Green Lifestyle Market) into Spring Boot plus Oracle, mainly to compare performance between the two stacks |
 
 ---
 
