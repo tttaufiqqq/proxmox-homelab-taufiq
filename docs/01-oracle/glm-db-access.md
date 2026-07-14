@@ -25,9 +25,15 @@ not just a filter. To browse this project's data:
 
 ## Accounts
 
+All Oracle credentials for this DB (`linux-oracle-db`, `FREEPDB1`), instance-wide and
+GLM-specific. No `@` in Oracle passwords — see
+[`docs/03-dbeaver/dbeaver-connectivity.md`](../03-dbeaver/dbeaver-connectivity.md#6-oracle-database-23ai-free-linux-oracle-db).
+
 | User | Role | Password | Use |
 |---|---|---|---|
-| `glm_app` | **Prod** schema owner | rotated, not recorded here | Deployed app only (`spring-boot-app` VM, port 8081) — 44 real tables, has `GLM_FDA` |
+| `sys` | Instance superuser (SYSDBA) | `qwertY1612` | Full-instance admin, `FREE` (CDB root) |
+| `system` | DBA account | `qwertY1612` | Same as `sys`, admin on `FREE` |
+| `glm_app` | **Prod** schema owner | `GlmApp_Ora26Q1Prod` — reset 2026-07-14 (previous value unknown/lost to rotation) | Deployed app only (`spring-boot-app` VM, port 8081) — 44 real tables, has `GLM_FDA` |
 | `glm_app_dev` | **Dev** schema owner | `GlmAppDev_Ora26Q1` | Local dev/IT tests only, from the workstation — has `GLM_FDA_DEV` |
 | `glm_dev` | Interactive/DBA (human) | `GlmDev_Ora26Q3` | Personal DBeaver login for browsing/admin work — added 2026-07-14 |
 

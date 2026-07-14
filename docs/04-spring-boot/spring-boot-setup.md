@@ -95,20 +95,10 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
   `/var/glm/frontend/dist` are both empty. The backend has substantial code already
   (contradicts the `green-lifestyle-market` README's "Implementation not started" —
   that line is stale) but deploying it needs a git clone, a `mvn package`, a frontend
-  `vite build` copied into `/var/glm/frontend/dist`, and a real `application-prod.properties`
-  / prod env file with secrets (ToyyibPay keys, VAPID keys, mail creds) that weren't
-  provided as part of this infra pass.
-- **`glm_app`'s current DB password is unknown.** The schema (`docs/01-oracle/oracle-install.md`
-  / `deploy/oracle-provision.sql`) is already provisioned on the Oracle VM — verified
-  2026-07-14: `GLM_APP` exists, is `OPEN`, has exactly the grants `oracle-provision.sql`
-  asks for (CREATE SESSION/TABLE/SEQUENCE/PROCEDURE/TRIGGER/VIEW, `CTXAPP` role,
-  `FLASHBACK ARCHIVE ADMINISTER`), and already owns 44 tables — meaning Flyway has
-  already migrated it from somewhere. Its password is **not** the placeholder in
-  `oracle-provision.sql` (`ChangeMe_Strong1!` — confirmed rejected), so it was rotated
-  at some point and that password isn't recorded in this repo. A prod env file can't
-  be created for `springapp-prod.env` until either that password is supplied or it's
-  reset (`ALTER USER glm_app IDENTIFIED BY ...`) — the latter is a live credential
-  rotation, so it needs sign-off first rather than being done unilaterally.
+  `vite build` copied into `/var/glm/frontend/dist`, and a real `springapp-prod.env`.
+  `glm_app`'s DB credentials are now known (reset 2026-07-14, see
+  [`docs/01-oracle/glm-db-access.md`](../01-oracle/glm-db-access.md)) — what's still
+  missing is the non-DB secrets (ToyyibPay keys, VAPID keys, mail creds).
 - **`docs/environment.md` in the GLM repo has a service-name inconsistency**: its
   example `DB_URL` uses `.../FREE` (the CDB root), while `backend/pom.xml`'s
   integration-test config and this VM's own working connection both use `.../FREEPDB1`
