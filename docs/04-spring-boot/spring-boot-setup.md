@@ -78,8 +78,7 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
    - `/actuator/` blocked except `/actuator/health`, per the repo's own note to
      never expose actuator endpoints publicly
 4. **`/var/glm/frontend/dist` and `/var/glm/uploads` created**, owned by `springapp`,
-   for nginx to serve from. Empty for now — no frontend build has been deployed yet
-   (see Outstanding below).
+   for nginx to serve from. Now holds a real frontend build (see Live Deployment below).
 5. **Cloudflare prod tunnel (`bf9aa8be-...`) re-pointed from `http://localhost:8081`
    directly to `http://localhost:80`** (nginx), so public traffic goes
    `Cloudflare edge → tunnel → nginx → (static SPA, or proxy to 8081 for /api and /ws)`
@@ -89,26 +88,69 @@ added operational surface (two systemd units, two tunnels, two log sets) with no
    firewall rule opened because the tunnel connects to it over loopback, not
    over the LAN/WAN.
 
-**Outstanding — not done, needs a decision from the repo owner before prod actually serves traffic:**
+## Live Deployment — 2026-07-14
 
-- **No code has been cloned/built on this VM yet.** `/opt/springapp/prod` and
-  `/var/glm/frontend/dist` are both empty. The backend has substantial code already
-  (contradicts the `green-lifestyle-market` README's "Implementation not started" —
-  that line is stale) but deploying it needs a git clone, a `mvn package`, a frontend
-  `vite build` copied into `/var/glm/frontend/dist`, and a real `springapp-prod.env`.
-  `glm_app`'s DB credentials are now known (reset 2026-07-14, see
-  [`docs/01-oracle/glm-db-access.md`](../01-oracle/glm-db-access.md)) — what's still
-  missing is the non-DB secrets (ToyyibPay keys, VAPID keys, mail creds).
-- **`docs/environment.md` in the GLM repo has a service-name inconsistency**: its
-  example `DB_URL` uses `.../FREE` (the CDB root), while `backend/pom.xml`'s
-  integration-test config and this VM's own working connection both use `.../FREEPDB1`
-  (the actual pluggable DB — confirmed reachable and correct via `v$pdbs`). Any prod
-  `DB_URL` here should use `FREEPDB1`, not `FREE`.
-- **Security note, unrelated to this VM but found during this pass:** GLM's local dev
-  `backend/.env` (on the primary workstation) authenticates as `sys`/`sysdba` with a
-  plaintext password, and the same password is hardcoded in `backend/pom.xml`
-  (`IT_DB_SYS_PASS`) and committed to the repo. That's a live SYS credential in version
-  control — worth rotating and moving to a secret store regardless of this deployment.
+GLM is live: **https://glm.tttaufiqqq.com** (custom domain, DNS-routed to the prod
+tunnel via `cloudflared tunnel route dns`) and the raw
+`https://bf9aa8be-4ab6-4028-ad63-bfd5e25aff00.cfargotunnel.com` — both verified `200`
+on `/` and `/api/v1/products`. `springapp-prod.service` is `active (running)`,
+listening on `8081`.
+
+**What it took to get from "infra ready" to "actually serving traffic"** — six real
+bugs, none related to the infra work above, all found by just trying to boot the app
+for the first time against a real Oracle backend:
+
+1. **`V6`'s Flashback Archive name collision** (`glm_fda` hardcoded, unique per PDB
+   not per-schema) — already fixed earlier the same day via a Flyway placeholder, but
+   editing an already-applied migration changed its checksum. Prod's
+   `flyway_schema_history` still had the old checksum, so `Validate failed: Migrations
+   have failed validation` blocked every boot until a one-time `flyway repair` (run via
+   a small standalone Java class using the project's own `flyway-core` dependency,
+   since no `flyway` CLI is installed) realigned it.
+2. **Spring Session JDBC tables never existed.** `application-prod.yml` had a comment
+   claiming they were Flyway-managed; no migration actually created them. Added
+   `V8__spring_session.sql`, copied verbatim from `spring-session-jdbc:3.3.3`'s own
+   bundled `schema-oracle.sql`.
+3. **`springapp-prod.service` was missing `EnvironmentFile=`** entirely (so
+   `/etc/springapp-prod.env` was never actually loaded) **and had the wrong
+   `WorkingDirectory`** (`/opt/springapp/prod` instead of `/opt/springapp/prod/backend`,
+   where `pom.xml` actually lives — would have failed with "No plugin found for prefix
+   'spring-boot'"). Both were bugs in the unit file from before this deployment existed.
+4. **`NotificationRepository.markAllReadForUser`'s JPQL used `CURRENT_TIMESTAMP`**
+   against an `Instant`-typed field; Hibernate 6.5's stricter query validator rejects
+   the implicit `java.sql.Timestamp` → `Instant` assignment at repository-bean-creation
+   time — meaning the *entire app* failed to boot over one query method, not just that
+   endpoint. Never caught locally because H2 (unit tests) is more lenient than real
+   Oracle-dialect validation. Fixed by passing `Instant.now()` from Java instead.
+5. **`webpush`'s `PushService` needs a `JwtFactory` implementation for VAPID signing**;
+   `pom.xml` declared neither. First attempt added raw `jose4j` (wrong — `webpush`
+   needs its own glue module); fixed with `dev.blanke.webpush.jwt:webpush-jwt-jose4j`,
+   which pulls `jose4j` transitively. Real VAPID keys were generated with
+   `npx web-push generate-vapid-keys` (blank/placeholder keys are **not** an option —
+   `PushService.Builder.withVapidPublicKey` decodes and validates the key eagerly in
+   `NotificationPublisher`'s constructor, so a bad key crashes startup, not just push).
+6. **`application-prod.yml` never actually set `server.port: 8081`** despite nginx,
+   the tunnel, UFW notes, and this doc all assuming it — prod silently ran on the base
+   default `8080`. `curl` to `8081` was connection-refused until this was added.
+
+**Frontend deploy:** `npm run build` locally, `scp` the `dist/` output to the VM,
+`rsync` into `/var/glm/frontend/dist`. One gotcha: `rsync -a` preserved the source
+directory's restrictive `700` permissions, which `nginx` (running as its own user)
+couldn't read — fixed with `chmod 755` on dirs / `644` on files after the copy.
+
+**Still genuinely open, by choice, not oversight:** ToyyibPay and mail secrets are
+still blank — confirmed safe (no eager validation at startup, see the code audit
+above), so payment and email flows simply won't work until real sandbox
+credentials are supplied. Not needed for a no-real-users learning deployment.
+
+**Found but not resolved — a data question, not a bug:** running the Flyway repair
+above surfaced a `dev seed` entry in prod's `flyway_schema_history` that had to be
+marked deleted (its migration script isn't on prod's classpath). That implies prod's
+`glm_app` schema — the one with 44 tables discovered pre-existing at the start of this
+whole session — may have had dev/test seed data loaded into it at some point before
+the dev/prod split existed, i.e. before `glm_app_dev` was created to prevent exactly
+that. Nothing was deleted or altered; flagged here for the repo owner to check the
+data itself if it matters (e.g. `SELECT * FROM users WHERE email LIKE '%@glm.dev'`).
 
 ---
 
@@ -168,7 +210,7 @@ Named tunnels — these never change regardless of VM restarts.
 | Environment | URL | Ingress target |
 |---|---|---|
 | DEV | `https://6a9cf731-a20d-496c-b6e9-a42f5d23f24d.cfargotunnel.com` | removed 2026-07-14 — local config/credentials deleted from this VM (not hosted here at all now); the tunnel object itself still exists in the Cloudflare account, just unused |
-| PROD | `https://bf9aa8be-4ab6-4028-ad63-bfd5e25aff00.cfargotunnel.com` | `http://localhost:80` (nginx) — changed 2026-07-14, was `:8081` direct |
+| PROD | `https://bf9aa8be-4ab6-4028-ad63-bfd5e25aff00.cfargotunnel.com` **and** `https://glm.tttaufiqqq.com` (custom domain, DNS-routed 2026-07-14 via `cloudflared tunnel route dns` — both resolve to the same tunnel) | `http://localhost:80` (nginx) — changed 2026-07-14, was `:8081` direct |
 
 Tunnels are managed by systemd and auto-start on boot:
 ```bash
