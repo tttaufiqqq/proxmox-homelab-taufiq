@@ -1,6 +1,6 @@
 # Taufiq's Homelab
 
-Five database engines. Six machines. One guy, one Proxmox box, and a lot of
+Six database engines. Seven machines. One guy, one Proxmox box, and a lot of
 3am troubleshooting.
 
 This repo is the running log of a personal homelab built to get real,
@@ -19,11 +19,12 @@ tutorial would be.
 
 | Area | What's in here |
 |---|---|
-| Database administration | Installing, securing, and troubleshooting Oracle, MySQL, MariaDB, PostgreSQL, and SQL Server, each with its own quirks (Oracle's illegal `@` in passwords, MySQL's bind address defaults, Postgres's `pg_hba.conf`) |
+| Database administration | Installing, securing, and troubleshooting Oracle, MySQL, MariaDB, PostgreSQL, SQL Server, and MongoDB, each with its own quirks (Oracle's illegal `@` in passwords, MySQL's bind address defaults, Postgres's `pg_hba.conf`, MongoDB's `bindIp` refusing to start on an unreachable address) |
 | Linux systems administration | User and permission management, systemd services, firewalld and UFW, log rotation, service persistence across reboots |
-| Virtualization | Provisioning and hardening VMs on Proxmox VE, including a real CPU compatibility failure (glibc requiring a microarchitecture the VM's CPU type didn't support) |
-| Networking | Designing a Tailscale mesh VPN across six machines, then building a self-hosted DNS layer (dnsmasq) with split horizon resolution on top of it |
+| Virtualization | Provisioning and hardening both VMs and LXC containers on Proxmox VE, and choosing between them deliberately (a real CPU compatibility failure — glibc requiring a microarchitecture the VM's CPU type didn't support — alongside a CT-vs-VM tradeoff call for lightweight network/API services) |
+| Networking | Designing a Tailscale mesh VPN across the lab, then building a self-hosted DNS layer (dnsmasq) with split horizon resolution on top of it |
 | Application integration | A Spring Boot service talking to Oracle over JDBC, with separate dev and prod environments and a permanent Cloudflare Tunnel for public access |
+| Infrastructure services | Self-hosted S3-compatible object storage (MinIO) and a centralized secrets manager (HashiCorp Vault) backing the rest of the lab, instead of credentials living in `.env` files or docs |
 | Troubleshooting discipline | Every doc includes root cause, not just the fix. Symptom, diagnosis, resolution, in that order, every time |
 | Technical writing | Long form documentation that another engineer (or future me) could actually follow and rebuild from |
 
@@ -55,10 +56,24 @@ tutorial would be.
 | 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | PostgreSQL 16 |
 | 107 | linux-oracle-db | Oracle Linux 8.10 | 192.168.0.106 | 100.118.110.114 | Oracle 23ai Free |
 | 103 | spring-boot-app | Ubuntu 24.04.4 | 192.168.0.105 (DHCP, drifts) | 100.120.243.96 | Hosts [`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market) ("prod"), Nginx — added to inventory 2026-07-14, was missing here despite being a separate node from `app-server` |
+| 109 | linux-mini-io | Ubuntu 22.04.5 | 192.168.0.105 (static) | 100.73.172.85 | MinIO (S3-compatible object storage) — added 2026-07-15 |
 
 Note: `spring-boot-app`'s Local IP is DHCP-assigned and has been observed reusing an
 address also leased to `linux-mariadb` while that VM was off — always use the
-Tailscale IP for this node.
+Tailscale IP for this node. `linux-mini-io`'s static IP (`192.168.0.105`) has since
+been observed matching that same reused address on paper; they don't run at the same
+time in practice, but the Tailscale IP is the reliable way to reach either.
+
+### Containers (LXC)
+
+| CT ID | Name | OS | Local IP | Tailscale IP | Purpose |
+|---|---|---|---|---|---|
+| 108 | linux-mongodb | Ubuntu 24.04 (unprivileged) | 192.168.0.108 | 100.82.200.94 | First NoSQL engine in the lab (document store) — added 2026-07-14, joined tailnet 2026-07-17 |
+| 110 | linux-vault | Ubuntu 24.04 (unprivileged) | 192.168.0.110 | 100.112.41.113 | HashiCorp Vault, centralized secrets manager for every VM/CT in the lab — added 2026-07-16 |
+
+Containers are used instead of VMs where a workload is a pure network/API service
+with no need for a separate kernel — see the CT vs VM decision in
+[`docs/07-vault/vault-setup.md`](docs/07-vault/vault-setup.md#ct-vs-vm-decision).
 
 Full inventory, client machines, and DNS naming conventions live in
 [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md#1-lab-environment-overview).
@@ -73,15 +88,20 @@ dedicated to a single engine, powered on when I need it and off otherwise
 (the Proxmox host only has 4 cores and 7.65 GiB of RAM, so idle VMs stay
 off). Oracle is the only engine that gets a full install log here because
 it was by far the hardest of the five to get working. The others went
-smoothly enough that there was nothing worth writing up.
+smoothly enough that there was nothing worth writing up. MinIO, MongoDB,
+and Vault are newer additions built from scratch inside this repo's
+timeline, so each gets a full doc regardless of how smoothly it went.
 
 | # | Doc | Covers |
 |---|---|---|
 | 01 | [`docs/01-oracle/oracle-install.md`](docs/01-oracle/oracle-install.md) | Installing Oracle Database 23ai Free on a Proxmox VM (Oracle Linux 8), full troubleshooting log |
 | 02 | [`docs/02-dns/dns-setup.md`](docs/02-dns/dns-setup.md) | Self-hosted DNS for the lab: dnsmasq plus Tailscale Split DNS, SSH config automation |
-| 03 | [`docs/03-dbeaver/dbeaver-connectivity.md`](docs/03-dbeaver/dbeaver-connectivity.md) | Using DBeaver as one place to manage all five engines: connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
+| 03 | [`docs/03-datagrip/datagrip-connectivity.md`](docs/03-datagrip/datagrip-connectivity.md) | Using DataGrip as one place to manage all six engines (DBeaver's original setup, retired 2026-07-15): connects over either the DNS hostname or the raw Tailscale IP, and makes it easy to jump between databases as VMs get powered on and off |
 | 04 | [`docs/04-spring-boot/spring-boot-setup.md`](docs/04-spring-boot/spring-boot-setup.md) | Spring Boot app server, sole live host for [`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market) (a learning project with no real users), a rewrite of an old PHP plus MySQL project into Spring Boot plus Oracle |
-| 05 | [`docs/01-oracle/glm-db-access.md`](docs/01-oracle/glm-db-access.md) | Green Lifestyle Market's database side: the DBeaver connection fix from doc 03 (PDB vs CDB), the schema isolation set up alongside doc 04's deployment, the `glm_dev` DBA account, and current schema health |
+| 05 | [`docs/01-oracle/glm-db-access.md`](docs/01-oracle/glm-db-access.md) | Green Lifestyle Market's database side: the connection fix from doc 03 (PDB vs CDB), the schema isolation set up alongside doc 04's deployment, the `glm_dev` DBA account, and current schema health |
+| 06 | [`docs/05-minio/minio-setup.md`](docs/05-minio/minio-setup.md) | Self-hosted S3-compatible object storage on a dedicated VM (MinIO), two-disk layout (OS + data), systemd service, and hardening (UFW, fail2ban, unattended-upgrades) |
+| 07 | [`docs/06-mongodb/mongodb-setup.md`](docs/06-mongodb/mongodb-setup.md) | First NoSQL engine in the lab, run as an LXC container rather than a VM to keep the resource footprint down; six real issues hit getting from "CT created" to "MongoDB actually running," including a Proxmox storage content-type gap and a `bindIp` failure caused by a Tailscale IP the CT didn't actually have |
+| 08 | [`docs/07-vault/vault-setup.md`](docs/07-vault/vault-setup.md) | HashiCorp Vault as a centralized secrets manager for every VM and CT in the lab, replacing credentials scattered across `.env` files and docs; CT vs VM tradeoff, `mlock` and TUN-device issues specific to running Vault + Tailscale inside an LXC container |
 
 ---
 

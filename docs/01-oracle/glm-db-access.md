@@ -3,7 +3,7 @@
 Quick-reference for connecting to and administering the `GLM_APP` schema
 (Green Lifestyle Market backend, `FREEPDB1` on `linux-oracle-db`). Full
 Oracle connectivity background lives in
-[`docs/03-dbeaver/dbeaver-connectivity.md`](../03-dbeaver/dbeaver-connectivity.md) —
+[`docs/03-datagrip/datagrip-connectivity.md`](../03-datagrip/datagrip-connectivity.md) —
 this doc only covers what's specific to this one project. For how GLM is hosted,
 see [`docs/04-spring-boot/spring-boot-setup.md`](../04-spring-boot/spring-boot-setup.md).
 
@@ -11,7 +11,7 @@ see [`docs/04-spring-boot/spring-boot-setup.md`](../04-spring-boot/spring-boot-s
 > means "the schema the deployed copy uses," kept separate from "dev" for DBA practice
 > (isolation, blast radius, credential hygiene), not because a real outage is at stake.
 
-## Connecting in DBeaver
+## Connecting
 
 The existing homelab connection points at service **`FREE`** (the CDB root)
 as `sys`. That can't see `GLM_APP` — in Oracle's multitenant architecture,
@@ -20,14 +20,19 @@ not just a filter. To browse this project's data:
 
 1. New connection (or edit existing): **Service Name = `FREEPDB1`**, not `FREE`.
 2. Connection settings → Oracle tab → enable **"Show all schemas"**
-   (DBeaver defaults to showing only the connected user's own schema).
+   (defaults to showing only the connected user's own schema).
 3. Navigate: `Database Navigator → connection → Schemas → GLM_APP → Tables`.
+
+> Written while the GUI client in use was DBeaver, since replaced by DataGrip
+> (see `docs/03-datagrip/datagrip-connectivity.md`); the "Show all schemas"
+> toggle lives under the equivalent Oracle connection settings in DataGrip
+> too, but hasn't been re-verified there since the switch.
 
 ## Accounts
 
 All Oracle credentials for this DB (`linux-oracle-db`, `FREEPDB1`), instance-wide and
 GLM-specific. No `@` in Oracle passwords — see
-[`docs/03-dbeaver/dbeaver-connectivity.md`](../03-dbeaver/dbeaver-connectivity.md#6-oracle-database-23ai-free-linux-oracle-db).
+[`docs/03-datagrip/datagrip-connectivity.md`](../03-datagrip/datagrip-connectivity.md).
 
 | User | Role | Password | Use |
 |---|---|---|---|
@@ -60,7 +65,7 @@ and prod's `glm_app` (44 tables) and `GLM_FDA` were confirmed untouched.
   indistinguishably; a personal login makes interactive changes traceable
   against the audit log / Flashback Archive already in place on this schema.
 - **Independent credential lifecycle** — rotating the app's DB password
-  doesn't break your DBeaver session, and vice versa.
+  doesn't break your GUI client session, and vice versa.
 - **Blast radius** — day-to-day browsing doesn't need `sys`'s full-instance
   DBA power; `glm_dev` only has grants on `GLM_APP`'s own tables.
 

@@ -49,6 +49,15 @@
 | 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | workshop-2 |
 | 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | workshop-postgres |
 | 107 | linux-oracle-db | Oracle Linux 8.10 | 192.168.0.106 | 100.118.110.114 | linux-oracle-db |
+| 103 | spring-boot-app | Ubuntu 24.04.4 | 192.168.0.105 (DHCP, drifts) | 100.120.243.96 | spring-boot-app |
+| 109 | linux-mini-io | Ubuntu 22.04.5 | 192.168.0.105 (static) | 100.73.172.85 | (see [`docs/05-minio/minio-setup.md`](../05-minio/minio-setup.md)) |
+
+### Containers (LXC)
+
+| CT ID | Name | OS | Local IP | Tailscale IP |
+|---|---|---|---|---|
+| 108 | linux-mongodb | Ubuntu 24.04 (unprivileged) | 192.168.0.108 | 100.82.200.94 |
+| 110 | linux-vault | Ubuntu 24.04 (unprivileged) | 192.168.0.110 | 100.112.41.113 |
 
 ### Client Machines
 
@@ -259,6 +268,10 @@ log-queries
 log-facility=/var/log/dnsmasq.log
 EOF
 ```
+
+> **Updated 2026-07-17:** four VMs/CTs added after this initial write-up
+> (`spring-boot-app`, `linux-mini-io`, `linux-mongodb`, `linux-vault`) — see the
+> current full config in [§8](#8-configuration-files) below.
 
 **Explanation of every important directive:**
 
@@ -727,7 +740,7 @@ from config            (domain not found)
 # ============================================================
 # taufiq.lab — Personal Homelab DNS
 # Proxmox Host: 100.97.8.93
-# Last updated: 2 July 2026
+# Last updated: 17 July 2026
 # ============================================================
 
 no-resolv
@@ -746,13 +759,17 @@ server=1.1.1.1
 # Proxmox
 address=/proxmox.taufiq.lab/100.97.8.93
 
-# VMs
+# Virtual Machines & Containers
 address=/linux-app-server.taufiq.lab/100.100.123.90
 address=/linux-mysql.taufiq.lab/100.115.237.93
 address=/linux-mariadb.taufiq.lab/100.78.124.25
 address=/linux-postgres.taufiq.lab/100.113.234.24
 address=/linux-oracle-db.taufiq.lab/100.118.110.114
 address=/linux-sql-server.taufiq.lab/100.117.38.113
+address=/spring-boot-app.taufiq.lab/100.120.243.96
+address=/linux-mini-io.taufiq.lab/100.73.172.85
+address=/linux-mongodb.taufiq.lab/100.82.200.94
+address=/linux-vault.taufiq.lab/100.112.41.113
 
 # Short aliases
 address=/app-server.taufiq.lab/100.100.123.90
@@ -762,6 +779,9 @@ address=/mariadb.taufiq.lab/100.78.124.25
 address=/postgres.taufiq.lab/100.113.234.24
 address=/oracle.taufiq.lab/100.118.110.114
 address=/mssql.taufiq.lab/100.117.38.113
+address=/minio.taufiq.lab/100.73.172.85
+address=/mongodb.taufiq.lab/100.82.200.94
+address=/vault.taufiq.lab/100.112.41.113
 
 # Other devices
 address=/kali.taufiq.lab/100.127.241.63
@@ -772,8 +792,8 @@ cache-size=1000
 neg-ttl=60
 
 # Logging — comment out when done debugging
-# log-queries
-# log-facility=/var/log/dnsmasq.log
+log-queries
+log-facility=/var/log/dnsmasq.log
 ```
 
 ### C:\Users\taufi\.ssh\config (Final Version)
@@ -1022,9 +1042,15 @@ Confirmed on: linux-app-server, Proxmox host.
 │ linux-postgres.taufiq.la │ 100.113.234.2 │ 192.168.0.107  │
 │ linux-oracle-db.taufiq.l │ 100.118.110.1 │ 192.168.0.106  │
 │ linux-sql-server.taufiq. │ 100.117.38.11 │ 192.168.0.104  │
+│ spring-boot-app.taufiq.  │ 100.120.243.9 │ 192.168.0.105* │
+│ linux-mini-io.taufiq.lab │ 100.73.172.85 │ 192.168.0.105* │
+│ linux-mongodb.taufiq.lab │ 100.82.200.94 │ 192.168.0.108  │
+│ linux-vault.taufiq.lab   │ 100.112.41.11 │ 192.168.0.110  │
 │ kali.taufiq.lab          │ 100.127.241.6 │ WSL             │
 │ ansible.taufiq.lab       │ 100.112.163.3 │ WSL             │
 └──────────────────────────┴───────────────┴─────────────────┘
+* spring-boot-app is DHCP and drifts; linux-mini-io's static IP has been seen
+  colliding with it on paper while spring-boot-app is off. Use the Tailscale IP.
 ```
 
 ### Adding a New VM Checklist

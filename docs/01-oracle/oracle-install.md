@@ -51,7 +51,7 @@ This document is written as an honest troubleshooting log, not a sanitized tutor
 | DBMS | Oracle Database 23ai Free (`23.7.0.25.01`) |
 | DB identifiers | CDB: `FREE` · PDB: `FREEPDB1` |
 | Remote access | Tailscale mesh only (LAN/public access disabled) |
-| DB client | DBeaver Community |
+| DB client | DBeaver Community at time of writing; DataGrip since (see [`docs/03-datagrip`](../03-datagrip/datagrip-connectivity.md)) |
 
 ---
 
@@ -402,7 +402,54 @@ sqlplus / as sysdba
 SQL> ALTER SYSTEM REGISTER;
 ```
 
-> **Follow-up:** `ALTER SYSTEM REGISTER` fixes registration for the current session, but it did not survive a VM reboot. The permanent fix (setting `local_listener` to an explicit TCP address instead of a TNS alias) was found later while setting up DBeaver, and is documented in [`docs/03-dbeaver/dbeaver-connectivity.md`, section 6.5](../03-dbeaver/dbeaver-connectivity.md#65-oracle-23ai-free-linux-oracle-db).
+> **Follow-up:** `ALTER SYSTEM REGISTER` fixes registration for the current session, but it did not survive a VM reboot. The permanent fix below was found later while setting up the first DB client connection.
+
+### 9.3 — Persistent fix: `local_listener` parameter
+
+The default `oracle-free-23ai` installation sets `local_listener = LISTENER_FREE` — a TNS
+alias. Without a `tnsnames.ora` file to resolve that alias, PMON can't locate the listener
+and never registers the `FREE` or `FREEPDB1` services. `lsnrctl status` shows "The listener
+supports no services" and `ALTER SYSTEM REGISTER` appears to succeed but has no lasting
+effect.
+
+**One-time fix (already applied, persists across reboots):**
+```sql
+-- As oracle OS user:
+sqlplus / as sysdba
+SQL> ALTER SYSTEM SET local_listener = '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' SCOPE=BOTH;
+SQL> ALTER SYSTEM REGISTER;
+SQL> EXIT;
+```
+
+`SCOPE=BOTH` writes to both the running instance and the spfile, so the parameter survives
+reboots. Applied 2 July 2026; does not need to be repeated unless the database is rebuilt
+from scratch. After applying, all three services registered immediately:
+```
+Service "FREE"     has 1 instance(s). Instance "FREE", status READY  ← CDB
+Service "freepdb1" has 1 instance(s). Instance "FREE", status READY  ← PDB
+Service "FREEXDB"  has 1 instance(s). Instance "FREE", status READY
+```
+
+**After every Oracle VM reboot:** PMON auto-registers services within ~60 seconds, no manual
+step needed. If `ORA-12514` still appears after that window, force immediate registration:
+```bash
+ssh -F /dev/null -i ~/.ssh/id_ed25519 linux-oracle-db@100.118.110.114
+echo 'qwertY@1612' | su -s /bin/bash - root -c 'su -s /bin/bash - oracle -c "
+  export ORACLE_HOME=/opt/oracle/product/23ai/dbhomeFree
+  export ORACLE_SID=FREE
+  export PATH=\$ORACLE_HOME/bin:\$PATH
+  sqlplus / as sysdba <<< \"ALTER SYSTEM REGISTER; EXIT;\"
+"'
+```
+
+If `lsnrctl status` shows "The listener supports no services" and the database has been up
+for more than 60 seconds, `local_listener` may have been reset — re-run the persistent fix
+above.
+
+> **Critical: `@` is illegal in Oracle passwords.** Oracle reserves `@` in connection
+> strings to separate host from service name (`user@host/service`), so it can't appear
+> inside the password itself. The `sys`/`system` password is `qwertY1612` — no `@`, unlike
+> every other homelab server's `qwertY@1612`. Using `qwertY@1612` here throws `ORA-01017`.
 
 ---
 
@@ -451,6 +498,10 @@ enabled
 ---
 
 ## Phase 12: Verification via DBeaver
+
+> DBeaver was the GUI client in use at the time this install was verified; the lab has
+> since moved to DataGrip (see [`docs/03-datagrip/datagrip-connectivity.md`](../03-datagrip/datagrip-connectivity.md)). Connection
+> fields below are client-agnostic and still apply.
 
 ### Administrative connection (SYSDBA)
 
@@ -525,7 +576,7 @@ Both connections verified successfully from DBeaver Community over the Tailscale
 ## Related Docs
 
 - [`docs/02-dns/dns-setup.md`](../02-dns/dns-setup.md): how this VM got its `linux-oracle-db.taufiq.lab` hostname
-- [`docs/03-dbeaver/dbeaver-connectivity.md`, section 6.5](../03-dbeaver/dbeaver-connectivity.md#65-oracle-23ai-free-linux-oracle-db): DBeaver setup, plus the permanent listener fix that follows up on Phase 9 above
+- [`docs/03-datagrip/datagrip-connectivity.md`](../03-datagrip/datagrip-connectivity.md): current GUI client connection setup for every engine, including this one
 - [`docs/04-spring-boot/spring-boot-setup.md`](../04-spring-boot/spring-boot-setup.md): the app server that uses this VM as its database backend
 
 ---
