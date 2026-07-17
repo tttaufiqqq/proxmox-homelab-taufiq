@@ -50,13 +50,13 @@ tutorial would be.
 | VM ID | Name | OS | Local IP | Tailscale IP | Engine |
 |---|---|---|---|---|---|
 | 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use) |
-| 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 |
+| 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 — also backs [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a downstream Windows desktop project (see [`docs/08-library-management-system/`](docs/08-library-management-system/library-management-system.md)) |
 | 104 | linux-mysql | Ubuntu 24.04 | 192.168.0.103 | 100.115.237.93 | MySQL 8.0 |
 | 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 |
 | 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | PostgreSQL 16 |
 | 107 | linux-oracle-db | Oracle Linux 8.10 | 192.168.0.106 | 100.118.110.114 | Oracle 23ai Free |
 | 103 | spring-boot-app | Ubuntu 24.04.4 | 192.168.0.105 (DHCP, drifts) | 100.120.243.96 | Hosts [`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market) ("prod"), Nginx — added to inventory 2026-07-14, was missing here despite being a separate node from `app-server` |
-| 109 | linux-mini-io | Ubuntu 22.04.5 | 192.168.0.105 (static) | 100.73.172.85 | MinIO (S3-compatible object storage) — added 2026-07-15 |
+| 109 | linux-mini-io | Ubuntu 22.04.5 | 192.168.0.105 (static) | 100.73.172.85 | MinIO (S3-compatible object storage) — added 2026-07-15, also stores book cover images for [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP) |
 
 Note: `spring-boot-app`'s Local IP is DHCP-assigned and has been observed reusing an
 address also leased to `linux-mariadb` while that VM was off — always use the
@@ -102,6 +102,7 @@ timeline, so each gets a full doc regardless of how smoothly it went.
 | 06 | [`docs/05-minio/minio-setup.md`](docs/05-minio/minio-setup.md) | Self-hosted S3-compatible object storage on a dedicated VM (MinIO), two-disk layout (OS + data), systemd service, and hardening (UFW, fail2ban, unattended-upgrades) |
 | 07 | [`docs/06-mongodb/mongodb-setup.md`](docs/06-mongodb/mongodb-setup.md) | First NoSQL engine in the lab, run as an LXC container rather than a VM to keep the resource footprint down; six real issues hit getting from "CT created" to "MongoDB actually running," including a Proxmox storage content-type gap and a `bindIp` failure caused by a Tailscale IP the CT didn't actually have |
 | 08 | [`docs/07-vault/vault-setup.md`](docs/07-vault/vault-setup.md) | HashiCorp Vault as a centralized secrets manager for every VM and CT in the lab, replacing credentials scattered across `.env` files and docs; CT vs VM tradeoff, `mlock` and TUN-device issues specific to running Vault + Tailscale inside an LXC container |
+| 09 | [`docs/08-library-management-system/library-management-system.md`](docs/08-library-management-system/library-management-system.md) | A second downstream project — [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a Windows desktop WinForms app — consuming this homelab's SQL Server VM and MinIO instance from outside the tailnet; what it uses and how its access is scoped |
 
 ---
 
