@@ -19,7 +19,8 @@
 9. [Troubleshooting Log](#9-troubleshooting-log)
 10. [Knowledge Gained](#10-knowledge-gained)
 11. [Final Verification Results](#11-final-verification-results)
-12. [Reference — All IPs and Names](#12-reference--all-ips-and-names)
+12. [Coverage Audit — 19 July 2026](#12-coverage-audit--19-july-2026)
+13. [Reference — All IPs and Names](#13-reference--all-ips-and-names)
 
 ---
 
@@ -1025,7 +1026,94 @@ Confirmed on: linux-app-server, Proxmox host.
 
 ---
 
-## 12. Reference — All IPs and Names
+## 12. Coverage Audit — 19 July 2026
+
+Ran a full audit to confirm every service in the lab has a working DNS record —
+prompted by a request to "set up DNS for services that don't have it yet."
+
+### Method
+
+1. Listed every VM/CT actually running on the Proxmox host (`qm list`, `pct list`),
+   not just what the docs claimed, to catch anything undocumented.
+2. Cross-referenced that list against `/etc/dnsmasq.conf` on the Proxmox host
+   (read live over SSH, not from this doc — the doc can drift from reality).
+3. Queried the live resolver (`100.97.8.93`) for every long-form hostname and every
+   short alias, from **two vantage points**: the Proxmox host itself and a Windows
+   client (`msi-laptop`) reaching it over Tailscale Split DNS, so both the
+   authoritative side and the actual client-facing path were exercised.
+4. Checked `dnsmasq` service health, config syntax (`dnsmasq --test`), and tailed
+   `/var/log/dnsmasq.log` to see the live queries land.
+
+### Finding: one undocumented VM, intentionally left out of DNS
+
+`qm list` showed **VM 100, `fyp-hanim`** (stopped), running on the same Proxmox
+host but absent from this repo's inventory (§1) and from `/etc/dnsmasq.conf`. It
+is not part of this homelab's database services — it appears to be an unrelated
+project sharing the hypervisor — so it was deliberately excluded from
+`taufiq.lab` DNS rather than added. Recorded here so a future audit doesn't
+mistake it for a gap.
+
+### Finding: every in-scope service already resolves
+
+Every VM/CT actually in this repo's inventory (§1) already had an `address=`
+record in `/etc/dnsmasq.conf`, added incrementally as each service was built
+(most recently `spring-boot-app`, `linux-mini-io`, `linux-mongodb`,
+`linux-vault` on 2026-07-17). All 11 long-form hostnames resolved correctly
+from both vantage points:
+
+| Hostname | Resolved IP | Proxmox (`dig @127.0.0.1`) | Client (`msi-laptop` via Split DNS) |
+|---|---|---|---|
+| proxmox.taufiq.lab | 100.97.8.93 | ✅ | ✅ |
+| linux-app-server.taufiq.lab | 100.100.123.90 | ✅ | ✅ |
+| linux-mysql.taufiq.lab | 100.115.237.93 | ✅ | ✅ |
+| linux-mariadb.taufiq.lab | 100.78.124.25 | ✅ | ✅ |
+| linux-postgres.taufiq.lab | 100.113.234.24 | ✅ | ✅ |
+| linux-oracle-db.taufiq.lab | 100.118.110.114 | ✅ | ✅ |
+| linux-sql-server.taufiq.lab | 100.117.38.113 | ✅ | ✅ |
+| spring-boot-app.taufiq.lab | 100.120.243.96 | ✅ | ✅ |
+| linux-mini-io.taufiq.lab | 100.73.172.85 | ✅ | ✅ |
+| linux-mongodb.taufiq.lab | 100.82.200.94 | ✅ | ✅ |
+| linux-vault.taufiq.lab | 100.112.41.113 | ✅ | ✅ |
+
+`dnsmasq --test` passed and `systemctl status dnsmasq` showed the service active
+since 2026-07-17 with no restart needed — nothing in this audit required a config
+change or reload.
+
+### Finding: one stale alias in this doc's own §8 config listing
+
+Testing the short aliases turned up a doc/reality mismatch: §8 above lists both
+`address=/app.taufiq.lab/...` and `address=/app-server.taufiq.lab/...` as the
+"Final Version," but the live config only has `app.taufiq.lab` — `app-server`
+was never actually added and returns `NXDOMAIN`. It doesn't block anything
+(`linux-app-server.taufiq.lab` and `app.taufiq.lab` both work), so it was left
+as-is rather than silently patched. Flagging it here as a known, low-priority
+gap for whenever §8 is next touched.
+
+| Alias | Resolved IP | Result |
+|---|---|---|
+| app.taufiq.lab | 100.100.123.90 | ✅ |
+| app-server.taufiq.lab | — | ❌ NXDOMAIN (never added, doc overstates config) |
+| mysql.taufiq.lab | 100.115.237.93 | ✅ |
+| mariadb.taufiq.lab | 100.78.124.25 | ✅ |
+| postgres.taufiq.lab | 100.113.234.24 | ✅ |
+| oracle.taufiq.lab | 100.118.110.114 | ✅ |
+| mssql.taufiq.lab | 100.117.38.113 | ✅ |
+| minio.taufiq.lab | 100.73.172.85 | ✅ |
+| mongodb.taufiq.lab | 100.82.200.94 | ✅ |
+| vault.taufiq.lab | 100.112.41.113 | ✅ |
+
+### Conclusion
+
+No new `address=` records were needed — every service this repo documents was
+already covered as of the 2026-07-17 update in §8. This audit is the
+verification step itself: it's the first time all records were checked from a
+real client over Split DNS rather than just from the Proxmox host, and it
+surfaced the `fyp-hanim` scope question and the `app-server` alias drift, both
+now recorded above instead of silently sitting undiscovered.
+
+---
+
+## 13. Reference — All IPs and Names
 
 ### Quick Reference Card
 
@@ -1107,6 +1195,7 @@ icacls $env:USERPROFILE\.ssh\config    # check permissions
 ---
 
 *Documentation generated: 2 July 2026*  
+*Last coverage audit: 19 July 2026 — see §12*  
 *Lab domain: taufiq.lab*  
 *DNS server: dnsmasq on Proxmox (100.97.8.93)*  
 *VPN mesh: Tailscale*
