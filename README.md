@@ -49,11 +49,11 @@ tutorial would be.
 
 | VM ID | Name | OS | Local IP | Tailscale IP | Engine |
 |---|---|---|---|---|---|
-| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use) |
+| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use). Its distributed-DB setup — 5 named connections split across this VM, 105, and 106 below — is documented from the app side in that repo's [`docs/db-architecture.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/db-architecture.md). |
 | 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 — also backs [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a downstream Windows desktop project (see [`docs/08-library-management-system/`](docs/08-library-management-system/library-management-system.md)) |
 | 104 | linux-mysql | Ubuntu 24.04 | 192.168.0.103 | 100.115.237.93 | MySQL 8.0 |
-| 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 |
-| 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | PostgreSQL 16 |
+| 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 — also backs [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s `booking` and `reporting` connections (database `workshop_2`) |
+| 106 | linux-postgres | Ubuntu 24.04 | 192.168.0.107 | 100.113.234.24 | PostgreSQL 16 — also backs [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s `users` connection (database `workshop_2`) |
 | 107 | linux-oracle-db | Oracle Linux 8.10 | 192.168.0.106 | 100.118.110.114 | Oracle 23ai Free |
 | 103 | spring-boot-app | Ubuntu 24.04.4 | 192.168.0.105 (DHCP, drifts) | 100.120.243.96 | Hosts [`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market) ("prod"), Nginx — added to inventory 2026-07-14, was missing here despite being a separate node from `app-server` |
 | 109 | linux-mini-io | Ubuntu 22.04.5 | 192.168.0.105 (static) | 100.73.172.85 | MinIO (S3-compatible object storage) — added 2026-07-15, also stores book cover images for [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP) |
