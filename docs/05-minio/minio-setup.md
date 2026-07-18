@@ -238,4 +238,16 @@ intervention needed — matches the result from the original test above.
 - XFS chosen as filesystem per MinIO recommendation
 - MinIO version: `RELEASE.2025-09-07T16-13-09Z`
 - Tailscale installed for remote access — reachable at `100.73.172.85` from any Tailscale device
-- To add DNS alias: `address=/linux-mini-io.taufiq.lab/100.73.172.85` in dnsmasq on Proxmox
+- DNS alias `linux-mini-io.taufiq.lab` → `100.73.172.85` is live (confirmed resolving 2026-07-17,
+  despite this doc's original note framing it as still to-do)
+
+## 2026-07-17 — GLM project bucket
+
+Green Lifestyle Market (the other project in this homelab, `C:\Users\taufi\Documents\Dev\
+green-lifestyle-market`) now uses this MinIO instance for product image storage — see its
+`docs/adr/0006-minio-object-storage.md`. Bucket `glm-product-images` created, plus a dedicated
+least-privilege access key (`glmapp-8ef65fc5270a`) scoped to only that bucket via an inline policy
+(`glm-app-policy`: GetObject/PutObject/DeleteObject/ListBucket on `glm-product-images` and
+`glm-product-images/*` only — verified it cannot list other buckets on this server). The app's
+`backend/.env` holds the scoped key; root credentials were used only once, interactively over SSH, to
+run `mc mb` / `mc admin policy create` / `mc admin user add` — never stored in the GLM repo.

@@ -39,7 +39,7 @@ GLM-specific. No `@` in Oracle passwords — see
 | `sys` | Instance superuser (SYSDBA) | `qwertY1612` | Full-instance admin, `FREE` (CDB root) |
 | `system` | DBA account | `qwertY1612` | Same as `sys`, admin on `FREE` |
 | `glm_app` | **Prod** schema owner | `GlmApp_Ora26Q1Prod` — reset 2026-07-14 (previous value unknown/lost to rotation) | Deployed app only (`spring-boot-app` VM, port 8081) — 44 real tables, has `GLM_FDA` |
-| `glm_app_dev` | **Dev** schema owner | `GlmAppDev_Ora26Q1` | Local dev/IT tests only, from the workstation — has `GLM_FDA_DEV` |
+| `glm_app_dev` | **Dev** schema owner | `GlmAppDev_Ora26Q3` — reset 2026-07-17 (previous value `GlmAppDev_Ora26Q1` no longer authenticated; cause unknown, not a documented rotation) | Local dev/IT tests only, from the workstation — has `GLM_FDA_DEV` |
 | `glm_dev` | Interactive/DBA (human) | `GlmDev_Ora26Q3` | Personal DBeaver login for browsing/admin work — added 2026-07-14 |
 
 ## Dev/prod split (2026-07-14)
@@ -90,3 +90,22 @@ no native "auto-grant on future objects" short of Database Vault.
   append-only. Real fix is a `BEFORE UPDATE OR DELETE` trigger that
   unconditionally rejects, or Oracle 23ai's native immutable/blockchain
   table feature — not yet implemented.
+
+## 2026-07-17: glm_app_dev locked, then found to have a stale password
+
+Starting the backend (`mvn spring-boot:run -Dspring-boot.run.profiles=dev`) failed with
+`ORA-01017`. Diagnosis via sysdba (`ALTER SESSION SET CONTAINER = FREEPDB1;` then
+`dba_users`/`dba_profiles` — the CDB-root connection can't see PDB-local users, see
+"Connecting" above) found two separate issues, in order:
+
+1. **`GLM_APP_DEV` was `LOCKED(TIMED)`** — the `DEFAULT` profile's
+   `FAILED_LOGIN_ATTEMPTS = 10` had been exceeded at some point before this session.
+   Fixed with `ALTER USER GLM_APP_DEV ACCOUNT UNLOCK;`.
+2. **After unlocking, the documented password (`GlmAppDev_Ora26Q1`) still failed** —
+   confirmed independently of the Windows/JDBC client by running `sqlplus
+   glm_app_dev/GlmAppDev_Ora26Q1@//localhost:1521/FREEPDB1` directly on `linux-oracle-db`,
+   which also got `ORA-01017`. So the account's actual password no longer matched what was
+   recorded here — cause unknown (no rotation is documented for this account, unlike
+   `glm_app`'s prod reset on 2026-07-14). Fixed by resetting it: `ALTER USER GLM_APP_DEV
+   IDENTIFIED BY GlmAppDev_Ora26Q3 ACCOUNT UNLOCK;`, verified with the same direct-sqlplus
+   login check, then updated `backend/.env` to match.
