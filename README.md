@@ -49,7 +49,7 @@ tutorial would be.
 
 | VM ID | Name | OS | Local IP | Tailscale IP | Engine |
 |---|---|---|---|---|---|
-| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use). Its distributed-DB setup — 5 named connections split across this VM, 105, and 106 below — is documented from the app side in that repo's [`docs/db-architecture.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/db-architecture.md). |
+| 101 | app-server | Ubuntu 24.04 | 192.168.0.102 | 100.100.123.90 | Hosts [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) (sole purpose — corrected 2026-07-14, previously mislabeled "general purpose"; offline when not in use). Its distributed-DB setup — 5 named connections split across this VM, 105, and 106 below — is documented from the app side in that repo's [`docs/db-architecture.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/db-architecture.md). Its CI runs on `linux-gh-runner` (CT 111 below), not a GitHub-hosted runner, since it needs to reach these Tailscale-only DB hosts — see [`docs/09-github-actions-runner/actions-runner-setup.md`](docs/09-github-actions-runner/actions-runner-setup.md). |
 | 102 | linux-sql-server | Ubuntu 22.04 | 192.168.0.104 | 100.117.38.113 | SQL Server 2022 — also backs [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a downstream Windows desktop project (see [`docs/08-library-management-system/`](docs/08-library-management-system/library-management-system.md)) |
 | 104 | linux-mysql | Ubuntu 24.04 | 192.168.0.103 | 100.115.237.93 | MySQL 8.0 |
 | 105 | linux-mariadb | Ubuntu 24.04 | 192.168.0.105 | 100.78.124.25 | MariaDB 10.11 — also backs [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s `booking` and `reporting` connections (database `workshop_2`) |
@@ -70,6 +70,7 @@ time in practice, but the Tailscale IP is the reliable way to reach either.
 |---|---|---|---|---|---|
 | 108 | linux-mongodb | Ubuntu 24.04 (unprivileged) | 192.168.0.108 | 100.82.200.94 | First NoSQL engine in the lab (document store) — added 2026-07-14, joined tailnet 2026-07-17 |
 | 110 | linux-vault | Ubuntu 24.04 (unprivileged) | 192.168.0.110 | 100.112.41.113 | HashiCorp Vault, centralized secrets manager for every VM/CT in the lab — added 2026-07-16 |
+| 111 | linux-gh-runner | Ubuntu 24.04 (unprivileged) | 192.168.0.111 | 100.72.6.40 | Self-hosted GitHub Actions runner for [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) CI — added 2026-07-19, reads DB creds from `linux-vault` via a scoped read-only token (not the root token) |
 
 Containers are used instead of VMs where a workload is a pure network/API service
 with no need for a separate kernel — see the CT vs VM decision in
@@ -103,7 +104,8 @@ timeline, so each gets a full doc regardless of how smoothly it went.
 | 06 | [`docs/05-minio/minio-setup.md`](docs/05-minio/minio-setup.md) | Self-hosted S3-compatible object storage on a dedicated VM (MinIO), two-disk layout (OS + data), systemd service, and hardening (UFW, fail2ban, unattended-upgrades) |
 | 07 | [`docs/06-mongodb/mongodb-setup.md`](docs/06-mongodb/mongodb-setup.md) | First NoSQL engine in the lab, run as an LXC container rather than a VM to keep the resource footprint down; six real issues hit getting from "CT created" to "MongoDB actually running," including a Proxmox storage content-type gap and a `bindIp` failure caused by a Tailscale IP the CT didn't actually have |
 | 08 | [`docs/07-vault/vault-setup.md`](docs/07-vault/vault-setup.md) | HashiCorp Vault as a centralized secrets manager for every VM and CT in the lab, replacing credentials scattered across `.env` files and docs; CT vs VM tradeoff, `mlock` and TUN-device issues specific to running Vault + Tailscale inside an LXC container |
-| 09 | [`docs/08-library-management-system/library-management-system.md`](docs/08-library-management-system/library-management-system.md) | A second downstream project — [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a Windows desktop WinForms app — consuming this homelab's SQL Server VM and MinIO instance from outside the tailnet; what it uses and how its access is scoped |
+| 09 | [`docs/09-github-actions-runner/actions-runner-setup.md`](docs/09-github-actions-runner/actions-runner-setup.md) | Self-hosted GitHub Actions runner for `Animal-Shelter-Workshop`, run as an LXC container on the tailnet instead of a GitHub-hosted runner so it can reach the app's private DB servers; scoped read-only Vault token (not the root token used everywhere else) so a workflow can only read the three DB secrets it needs |
+| 10 | [`docs/08-library-management-system/library-management-system.md`](docs/08-library-management-system/library-management-system.md) | A second downstream project — [`Library-System-EDP`](https://github.com/tttaufiqqq/Library-System-EDP), a Windows desktop WinForms app — consuming this homelab's SQL Server VM and MinIO instance from outside the tailnet; what it uses and how its access is scoped |
 
 ---
 
