@@ -184,7 +184,7 @@ Confirmed after reboot: `/etc/resolv.conf` now shows `nameserver 8.8.8.8`,
 public DNS resolves, and `tailscaled`/the runner service/the Vault renewal
 timer all came back up on their own.
 
-### 6. First real workflow run exposed two bugs the runner itself was fine, they were on the app side
+### 6. First real workflow run exposed two bugs the runner itself was fine, they were on the app side — RESOLVED
 
 Once `Animal-Shelter-Workshop`'s `.github/workflows/tests.yml` actually ran on
 this runner for the first time (2026-07-19), every job failed immediately at
@@ -197,13 +197,24 @@ the filename does — so the replace corrupts the wrong part, silently
 producing a path that was never real. This CT's name is what triggers it; the
 bug itself lives entirely in the third-party action, not anything provisioned
 here. Fixing it meant dropping that action from the workflow, not touching
-this CT — a second, related gap (the runner never had `pdo_sqlite` installed,
-needed for the app's test-bookkeeping connection) surfaced right after, once
-the first fix let the workflow run far enough to reach it.
+this CT.
 
-Full root-cause writeup (the exact two lines of minified code, how it was
-reproduced by hand over SSH, and both fixes) lives in that repo, not here,
-since it's entirely an app/workflow-side fix:
+That fix just let the workflow run further, not finish — it surfaced three
+more gaps in sequence, each only reachable once the one before it was fixed:
+the runner never had `pdo_sqlite` installed (needed for the app's
+migration-bookkeeping connection) and the app's gitignored sqlite placeholder
+file didn't exist on a fresh checkout either; then a missing `gd` extension
+broke the image-upload tests; then a real (unrelated) test bug — one Browser
+test assigning a Spatie role without ever seeding it — surfaced once the
+`browser` job finally ran far enough to execute that file.
+
+**Status: fully resolved.** Run #11 (2026-07-20) is green end to end —
+`backend` (2m56s) and `browser` (1m6s) both pass, 7m5s total. This CT needed
+no changes for any of it; every fix landed in the app repo.
+
+Full root-cause writeup for all four (the exact two lines of minified
+`setup-php` code, how it was reproduced by hand over SSH, and each fix) lives
+in that repo, not here, since it's entirely an app/workflow/test-side fix:
 [`Animal-Shelter-Workshop/docs/11-ci.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/11-ci.md).
 
 ---
@@ -393,8 +404,10 @@ test.
 - DNS alias to add in dnsmasq on Proxmox host:
   `address=/linux-gh-runner.taufiq.lab/100.72.6.40`
 - First real `tests.yml` run (2026-07-19) exposed a genuine bug in a third-party
-  action, triggered specifically by this CT's name containing `linux` (see
-  Issue 6) — fixed entirely on the app side, nothing changed on this CT
+  action, triggered specifically by this CT's name containing `linux`, plus 3
+  more gaps found getting the workflow to actually finish (see Issue 6) — all
+  4 fixed entirely on the app side, nothing changed on this CT. CI has been
+  green end to end since 2026-07-20.
 - No `~/.ssh/config` alias exists yet for `linux-vault` or `linux-gh-runner`
   — connecting to either currently requires the raw Tailscale/LAN IP with an
   explicit `linux-vault@`/`linux-gh-runner@` user prefix
