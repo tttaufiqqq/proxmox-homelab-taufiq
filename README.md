@@ -39,7 +39,7 @@ tutorial would be.
 | Hostname | taufiq |
 | OS | Proxmox VE 9.1.1 |
 | CPU | Intel Core i5-6600T @ 2.70GHz (4 cores) |
-| RAM | 7.65 GiB |
+| RAM | 15.51 GiB (upgraded from 7.65 GiB, confirmed via SSH 2026-07-19) |
 | Storage | 225.19 GiB |
 | Kernel | Linux 6.17.2-1-pve |
 | Local IP | 192.168.0.10 |
@@ -85,9 +85,10 @@ Full inventory, client machines, and DNS naming conventions live in
 A quick note on scope before you read these. The MariaDB, MySQL, PostgreSQL,
 and SQL Server VMs already existed before this repo started, each one
 dedicated to a single engine, powered on when I need it and off otherwise
-(the Proxmox host only has 4 cores and 7.65 GiB of RAM, so idle VMs stay
-off). Oracle is the only engine that gets a full install log here because
-it was by far the hardest of the five to get working. The others went
+(the Proxmox host only has 4 cores, and had 7.65 GiB of RAM until a
+2026-07-19 upgrade to 15.51 GiB, so idle VMs stay off). Oracle is the
+only engine that gets a full install log here because it was by far the
+hardest of the five to get working. The others went
 smoothly enough that there was nothing worth writing up. MinIO, MongoDB,
 and Vault are newer additions built from scratch inside this repo's
 timeline, so each gets a full doc regardless of how smoothly it went.

@@ -33,7 +33,7 @@
 | Hostname | taufiq |
 | OS | Proxmox VE 9.1.1 |
 | CPU | Intel Core i5-6600T @ 2.70GHz (4 cores) |
-| RAM | 7.65 GiB |
+| RAM | 7.65 GiB (upgraded to 15.51 GiB on 2026-07-19, see main README) |
 | Storage | 225.19 GiB |
 | Kernel | Linux 6.17.2-1-pve |
 | Uptime at session start | 30 days 19:56:12 |
