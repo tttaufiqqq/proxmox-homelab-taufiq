@@ -347,6 +347,17 @@ Verified key-based SSH still works immediately after.
 
 ---
 
+## Related — non-root-token consumers
+
+Every consumer above authenticates with the root token. Two later additions deliberately don't:
+
+- `docs/09-github-actions-runner/actions-runner-setup.md` — `linux-gh-runner` uses a scoped
+  read-only **static token** (`gh-runner` policy, `secret/{mysql,mariadb,postgres}`).
+- `docs/11-vault-approle-app-integration/` — `Animal-Shelter-Workshop`'s Ansible deploy uses a
+  scoped **AppRole** (`asw-deploy` policy, `secret/animal-shelter-workshop`) instead of a static
+  token, since its consumer is an interactive WSL shell rather than a dedicated always-on CT. This
+  is the first (and so far only) use of Vault's `approle` auth method in this lab.
+
 ## Notes
 
 - CT chosen over VM — Vault is a pure network/API workload, no special kernel needed
