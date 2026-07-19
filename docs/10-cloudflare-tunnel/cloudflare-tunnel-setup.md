@@ -148,6 +148,39 @@ hostname (proving `APP_URL` took effect, not just the homepage happening to work
 
 ---
 
+## Reboot Survivability (checked, not yet empirically tested)
+
+Asked directly: does this setup survive `app-server` being shut down and turned back on? Checked
+everything that matters, matching the bar set by `linux-vault`/`linux-gh-runner`'s reboot tests
+elsewhere in this repo — but **couldn't perform an actual reboot** to confirm end-to-end the same
+way those did (no sudo on this box from the session that checked this, and no direct Proxmox host
+access to power-cycle the VM instead). What was verified instead, via config inspection:
+
+```bash
+systemctl is-enabled nginx        # enabled
+systemctl is-enabled php8.3-fpm   # enabled
+systemctl is-enabled cloudflared  # enabled
+systemctl is-enabled tailscaled   # enabled
+# all 4 also currently `active`, not just enabled — not a half-broken state
+tailscale ip -4                   # 100.100.123.90 — a real, persisted Tailscale identity,
+                                   # not a fresh/pending one that would need interactive
+                                   # browser re-auth after reconnecting
+ps aux | grep -E 'php artisan serve|node|npm'  # nothing — no stray foreground process
+                                                # outside systemd that a reboot would lose
+```
+
+**No gaps found, nothing needed fixing.** All four services `nginx`/`php8.3-fpm`/`cloudflared`/
+`tailscaled` are `enabled`, meaning systemd starts them automatically on boot with no manual
+intervention; Tailscale's identity is already persisted (`/var/lib/tailscale/`), so it reconnects
+on its own without needing re-approval from the admin console; and the app is served entirely
+through nginx+php-fpm with nothing running manually outside systemd's management.
+
+**Confidence is high but not proven** — recommend an actual `pct`/Proxmox-level shutdown + restart
+of VM 101 the next time it's convenient, then re-checking `curl -sI
+https://animal-shelter-workshop.tttaufiqqq.com/` and each service's `systemctl is-active` fresh
+after boot, the same way `docs/09-github-actions-runner/actions-runner-setup.md`'s reboot test did
+for CT 111.
+
 ## Notes / Known Gaps
 
 - **`TrustProxies` is not configured** in the Laravel app (`bootstrap/app.php` has no
