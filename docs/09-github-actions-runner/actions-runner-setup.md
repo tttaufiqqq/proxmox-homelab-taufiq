@@ -58,6 +58,8 @@ and a CT costs a fraction of a VM's CPU/RAM overhead for the same job.
 | Local IP | `192.168.0.111/24` (static) |
 | Gateway | `192.168.0.1` |
 | Bridge | vmbr0 |
+| Nameserver | `8.8.8.8` (explicit `pct set`, see Issue 5 — don't rely on Proxmox's default DNS injection) |
+| Searchdomain | `local` |
 | Tailscale IP | `100.72.6.40` |
 | Tailscale Interface | `tailscale0` |
 | SSH user | `linux-gh-runner` (sudo, key-only — root login and password auth both disabled) |
@@ -87,7 +89,8 @@ pct start 111
 
 DNS was set to `8.8.8.8` / `1.1.1.1` in `/etc/resolv.conf` from the start
 this time, to avoid the "CT points at Tailscale DNS before Tailscale is
-installed" trap that `linux-vault` hit.
+installed" trap that `linux-vault` hit — but this didn't actually stick;
+see Issue 5 below for what broke and the real fix.
 
 ### Dedicated user + SSH hardening
 
@@ -104,7 +107,10 @@ systemctl restart ssh
 
 Password auth was disabled here from the start — unlike `linux-vault`, which
 was found still defaulted to `PasswordAuthentication yes` while auditing this
-setup (flagged, not yet fixed — see Notes).
+setup. Fixed same-day: disabled on `linux-vault` too (via `pct exec 110` from
+the Proxmox host, since the `linux-vault` user doesn't have passwordless
+sudo), `systemctl restart ssh`, then confirmed key-based SSH still worked
+before moving on.
 
 ### Firewall
 
@@ -146,8 +152,37 @@ gpg` ran first.
 ### 4. Vault token TTL capped below what was requested
 Asked for a 1-year token (`-ttl=8760h`); Vault capped it to **768h (32
 days)** — the mount's `max_ttl` is lower than that. The token is renewable
-(`token_renewable: true`), so it needs `vault token renew` run against it
-before it expires, or it'll go stale. Not automated yet — see Notes.
+(`token_renewable: true`). Automated the renewal — see "Vault Token Renewal"
+below.
+
+### 5. DNS broke again, later, after Tailscale started
+The manual `/etc/resolv.conf` edit from provisioning didn't actually last.
+Once real work started (installing Node, `apt install`), public DNS lookups
+started failing — `Could not resolve host: archive.ubuntu.com`,
+`deb.nodesource.com`, etc. `cat /etc/resolv.conf` showed:
+```
+# --- BEGIN PVE ---
+search taile932d8.ts.net
+nameserver 100.100.100.100
+nameserver fd7a:115c:a1e0::53
+# --- END PVE ---
+```
+Root cause: CT 111 was created without explicit `--nameserver`/
+`--searchdomain` (unlike CT 108, which has `nameserver: 8.8.8.8` in its
+`pct config`). Without that, Proxmox's own DNS injection (the `# --- BEGIN
+PVE ---` block, regenerated on every container start) falls back to
+whatever the **Proxmox host itself** resolves with — and the host's own
+resolver is Tailscale's MagicDNS (`100.100.100.100`), since the host is on
+the tailnet too. Editing `/etc/resolv.conf` inside the CT is pointless here;
+Proxmox regenerates it from its own config on every boot. Real fix, from the
+Proxmox host:
+```bash
+pct set 111 --nameserver 8.8.8.8 --searchdomain local
+pct reboot 111   # config only applies at container start, not live
+```
+Confirmed after reboot: `/etc/resolv.conf` now shows `nameserver 8.8.8.8`,
+public DNS resolves, and `tailscaled`/the runner service/the Vault renewal
+timer all came back up on their own.
 
 ---
 
@@ -192,7 +227,13 @@ login session.
 Deliberately **not** installed: PHP, Composer, Node, or any app-language
 runtime. Those belong to whatever workflow file actually needs them, not the
 base runner image — keeps this CT a generic runner rather than one coupled
-to a specific app stack.
+to a specific app stack. Validated this holds up before committing to it:
+manually installed Node 20 and ran `npx playwright install --with-deps
+chromium` (needed for `Animal-Shelter-Workshop`'s Pest 4 browser tests) —
+both worked, and a real headless Chromium launch actually rendered a page
+with no sandbox/seccomp issues inside this unprivileged LXC. Removed both
+again afterward; the workflow provisions them itself per-job via
+`actions/setup-node`.
 
 ---
 
@@ -251,19 +292,61 @@ A workflow step reads a secret with:
 vault kv get -field=root_password secret/mariadb
 ```
 
+### Vault Token Renewal
+
+The token's 768h (32-day) TTL (Issue 4) is renewable but wasn't being
+renewed by anything. Added a systemd timer on `linux-gh-runner`:
+
+```bash
+sudo tee /etc/systemd/system/vault-token-renew.service >/dev/null <<'EOF'
+[Unit]
+Description=Renew linux-gh-runner's scoped Vault token
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/linux-gh-runner/actions-runner/.env
+ExecStart=/usr/bin/vault token renew
+EOF
+
+sudo tee /etc/systemd/system/vault-token-renew.timer >/dev/null <<'EOF'
+[Unit]
+Description=Periodic renewal of linux-gh-runner's Vault token (768h max TTL)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1d
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now vault-token-renew.timer
+```
+
+Runs daily — far more often than the 32-day TTL needs, but harmless, and
+means any single missed run is never a problem. Verified the first manual
+run renewed the token (`token_duration 767h40m10s`), and confirmed it
+survives a full CT reboot (timer re-armed, next run scheduled).
+
 ---
 
 ## Reboot Test — 2026-07-19
 
-`pct reboot 111` from the Proxmox host. Confirmed after boot, no manual
-steps:
+`pct reboot 111` from the Proxmox host, run twice: once right after initial
+setup, once again after the Issue 5 DNS fix (`pct set --nameserver`). Both
+times, confirmed after boot with no manual steps:
 
 - `tailscaled` active, reconnected on `100.72.6.40` with no re-authentication
 - Runner systemd service active and polling GitHub again
 - UFW active with the LAN/tailnet-only SSH rules intact
 - `~/actions-runner/.env` (Vault token) intact
+- (second reboot only) `/etc/resolv.conf` correctly shows `nameserver
+  8.8.8.8`, public DNS resolves, `vault-token-renew.timer` re-armed
 
-Full recovery, matching the bar set by `linux-vault`'s reboot test.
+Full recovery both times, matching the bar set by `linux-vault`'s reboot
+test.
 
 ---
 
@@ -276,11 +359,15 @@ Full recovery, matching the bar set by `linux-vault`'s reboot test.
   runner is attached — a public repo + self-hosted runner is a known RCE
   vector via PRs
 - Vault token is scoped read-only to `mysql`/`mariadb`/`postgres`, capped at
-  768h by Vault's `max_ttl` — **needs `vault token renew` before it expires**
-  (no renewal automation set up yet, tracked as a follow-up, not done here)
-- `linux-vault`'s `PasswordAuthentication yes` default was noticed while
-  setting this up — flagged, not fixed, as it's out of scope for this CT's
-  setup
+  768h by Vault's `max_ttl` — renewed automatically by a daily systemd timer
+  (see "Vault Token Renewal" above)
+- `linux-vault`'s `PasswordAuthentication yes` default, noticed while setting
+  this up, has been fixed — disabled the same day, confirmed key-based SSH
+  still works
+- CT 111 needs explicit `nameserver`/`searchdomain` set via `pct set` (see
+  Issue 5) — without it, Proxmox's DNS injection falls back to whatever the
+  Proxmox host itself resolves with, which is Tailscale's MagicDNS here and
+  doesn't forward public lookups
 - DNS alias to add in dnsmasq on Proxmox host:
   `address=/linux-gh-runner.taufiq.lab/100.72.6.40`
 - No `~/.ssh/config` alias exists yet for `linux-vault` or `linux-gh-runner`

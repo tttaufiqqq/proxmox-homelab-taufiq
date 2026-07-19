@@ -332,6 +332,21 @@ active with the rules above. Full recovery, no manual steps required.
 
 ---
 
+## Hardening — 2026-07-19
+
+Caught while setting up `docs/09-github-actions-runner/`: `PasswordAuthentication` was
+still at its default (enabled) here, unlike root login (already `prohibit-password`) —
+the only host in the inventory with this gap. Fixed:
+
+```bash
+# From the Proxmox host — the linux-vault user has no passwordless sudo
+pct exec 110 -- bash -c "sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && systemctl restart ssh"
+```
+
+Verified key-based SSH still works immediately after.
+
+---
+
 ## Notes
 
 - CT chosen over VM — Vault is a pure network/API workload, no special kernel needed
