@@ -10,8 +10,8 @@
 
 ## Why This Exists
 
-`Animal-Shelter-Workshop`'s own hardening docs
-([`docs/09-production-hardening.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/09-production-hardening.md)
+[`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s own hardening
+docs ([`docs/09-production-hardening.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/09-production-hardening.md)
 in that repo) originally planned TLS via nginx + Let's Encrypt/certbot — the standard approach,
 requiring a public DNS A record, port 443 forwarded on the home router, and an Ansible-managed
 renewal timer. That plan is still sound and still committed in that repo's
@@ -191,13 +191,16 @@ for CT 111.
   browser-to-Cloudflare leg is HTTPS). Not fixed here — would mean editing the app's own code, and
   this repo's session deliberately avoided pushing that repo's pending commits to GitHub while
   another session was mid-work on its GitHub Actions runner setup. Tracked as a follow-up in
-  `Animal-Shelter-Workshop`'s own `handoff.md`.
-- **No HSTS header yet.** `Animal-Shelter-Workshop`'s planned nginx template adds
-  `Strict-Transport-Security`, but since Cloudflare — not this app's nginx — terminates TLS here,
-  HSTS needs to be turned on in Cloudflare's own dashboard (SSL/TLS → Edge Certificates → Always
-  Use HTTPS / HTTP Strict Transport Security), not in application code. Not yet enabled.
+  [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s own
+  `handoff.md`.
+- **No HSTS header yet.** [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s
+  planned nginx template adds `Strict-Transport-Security`, but since Cloudflare — not this app's
+  nginx — terminates TLS here, HSTS needs to be turned on in Cloudflare's own dashboard (SSL/TLS →
+  Edge Certificates → Always Use HTTPS / HTTP Strict Transport Security), not in application code.
+  Not yet enabled.
 - **This bypasses the certbot-based Ansible TLS automation** committed in
-  `Animal-Shelter-Workshop`'s `infrastructure/ansible/playbooks/app-server.yml`. That automation
+  [`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop)'s
+  `infrastructure/ansible/playbooks/app-server.yml`. That automation
   still exists and still works for a scenario without Cloudflare in front — just not what's
   actually running on `app-server` right now. Worth a decision later if this project ever needs
   real users: Cloudflare Tunnel's simplicity was explicitly a trade against rigor that only matters
