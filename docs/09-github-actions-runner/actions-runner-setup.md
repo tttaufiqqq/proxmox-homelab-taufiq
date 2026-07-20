@@ -401,13 +401,24 @@ test.
   Issue 5) — without it, Proxmox's DNS injection falls back to whatever the
   Proxmox host itself resolves with, which is Tailscale's MagicDNS here and
   doesn't forward public lookups
-- DNS alias to add in dnsmasq on Proxmox host:
-  `address=/linux-gh-runner.taufiq.lab/100.72.6.40`
+- ~~DNS alias to add in dnsmasq on Proxmox host:
+  `address=/linux-gh-runner.taufiq.lab/100.72.6.40`~~ — **resolved 2026-07-20.**
+  Added (plus a `gh-runner.taufiq.lab` short alias) during a full DNS coverage
+  audit prompted by other resolution flakiness noticed elsewhere in the lab —
+  this CT genuinely had zero DNS record, the only real gap found. `systemctl
+  reload` alone didn't pick it up (SIGHUP doesn't re-read new `address=`
+  lines); a full `systemctl restart dnsmasq` did. Full detail:
+  `docs/02-dns/dns-setup.md`'s §12b.
 - First real `tests.yml` run (2026-07-19) exposed a genuine bug in a third-party
   action, triggered specifically by this CT's name containing `linux`, plus 3
   more gaps found getting the workflow to actually finish (see Issue 6) — all
   4 fixed entirely on the app side, nothing changed on this CT. CI has been
   green end to end since 2026-07-20.
-- No `~/.ssh/config` alias exists yet for `linux-vault` or `linux-gh-runner`
+- ~~No `~/.ssh/config` alias exists yet for `linux-vault` or `linux-gh-runner`
   — connecting to either currently requires the raw Tailscale/LAN IP with an
-  explicit `linux-vault@`/`linux-gh-runner@` user prefix
+  explicit `linux-vault@`/`linux-gh-runner@` user prefix~~ — **resolved
+  2026-07-20**, same session as the DNS fix above (the `linux-gh-runner` alias
+  needed working DNS first). Both usernames confirmed live via `pct exec
+  110/111 -- getent passwd`; both `Host` blocks added to
+  `C:\Users\taufi\.ssh\config`. `ssh linux-vault` / `ssh linux-gh-runner` now
+  connect cleanly.

@@ -788,6 +788,14 @@ address=/vault.taufiq.lab/100.112.41.113
 address=/kali.taufiq.lab/100.127.241.63
 address=/ansible.taufiq.lab/100.112.163.39
 
+# Added 2026-07-20 — see §12b's coverage audit
+address=/linux-mysql-2.taufiq.lab/100.123.221.89
+address=/mysql2.taufiq.lab/100.123.221.89
+address=/linux-mariadb-2.taufiq.lab/100.97.35.29
+address=/mariadb2.taufiq.lab/100.97.35.29
+address=/linux-gh-runner.taufiq.lab/100.72.6.40
+address=/gh-runner.taufiq.lab/100.72.6.40
+
 # Cache
 cache-size=1000
 neg-ttl=60
@@ -832,6 +840,14 @@ Host linux-oracle-db linux-oracle-db.taufiq.lab 100.118.110.114
 Host proxmox proxmox.taufiq.lab 100.97.8.93
     HostName proxmox.taufiq.lab
     User root
+
+Host linux-vault linux-vault.taufiq.lab 100.112.41.113
+    HostName linux-vault.taufiq.lab
+    User linux-vault
+
+Host linux-gh-runner linux-gh-runner.taufiq.lab 100.72.6.40
+    HostName linux-gh-runner.taufiq.lab
+    User linux-gh-runner
 ```
 
 ### /etc/wsl.conf (Ubuntu WSL — taufiq-ansible)
@@ -1113,6 +1129,74 @@ now recorded above instead of silently sitting undiscovered.
 
 ---
 
+## 12b. Coverage Audit — 20 July 2026
+
+Prompted by a request to resolve outstanding DNS gaps across every VM/CT.
+Re-ran §12's method against the *current* fleet — `qm list`/`pct list` on
+Proxmox compared against the live `/etc/dnsmasq.conf` (read live, not from
+this doc) — since two new CTs (`linux-mariadb-2` CT 113, `linux-mysql-2` CT
+112, see `docs/12-mysql-shelter-animals-split/` and
+`docs/13-mariadb-reporting-booking-split/`) were built after §12's audit.
+
+### Finding: `linux-mariadb-2`/`linux-mysql-2` were already covered
+
+Both had `address=` records (plus `mariadb2`/`mysql2` short aliases) already
+in the live config — added as part of the split work itself, just never
+folded back into this doc's §8 listing until now. Resolved correctly from
+both Proxmox and a client (`msi-laptop`) over Split DNS. No gap here; this
+doc was simply behind reality.
+
+### Finding: `linux-gh-runner` (CT 111) had no DNS record at all — the real gap
+
+Every other running VM/CT had an `address=` entry; `linux-gh-runner` never
+did. This was already flagged as a known gap in
+`docs/09-github-actions-runner/actions-runner-setup.md`'s "Still Open" list
+(`address=/linux-gh-runner.taufiq.lab/100.72.6.40` — written down when the
+runner was built, never actually applied). Confirmed via `dig
+@127.0.0.1 linux-gh-runner.taufiq.lab` returning `NXDOMAIN`.
+
+**Fixed:** appended `address=/linux-gh-runner.taufiq.lab/100.72.6.40` and a
+`gh-runner.taufiq.lab` short alias to `/etc/dnsmasq.conf` (config backed up
+first, `dnsmasq --test` passed). **`systemctl reload dnsmasq` (SIGHUP) does
+NOT re-read new `address=` directives in the main config file** — confirmed
+directly: reload succeeded, service stayed healthy, but the new record still
+returned `NXDOMAIN` afterward. dnsmasq's SIGHUP handling only re-reads
+`/etc/hosts`-style files and clears the cache, not `dnsmasq.conf` itself. A
+full `systemctl restart dnsmasq` was required, after which both records
+resolved correctly from Proxmox (`dig @127.0.0.1`) and from `msi-laptop`
+(`Resolve-DnsName`) over Tailscale Split DNS. Worth remembering for any
+future `address=` addition — the "Adding a New VM Checklist" in §13 said
+`reload`; that's now corrected below.
+
+### Finding: no SSH config alias existed for `linux-vault` or `linux-gh-runner`
+
+Also flagged in the same "Still Open" list — a direct consequence of the DNS
+gap above for `linux-gh-runner` (no working hostname to point `HostName` at
+until now), and just never done for `linux-vault` despite its DNS record
+already existing. Both usernames confirmed live via `pct exec 110/111 --
+getent passwd` (each CT's login user matches its hostname: `linux-vault`,
+`linux-gh-runner`). Added both `Host` blocks to
+`C:\Users\taufi\.ssh\config`, matching the existing pattern for every other
+host. First connection to each needed one-time host-key acceptance (`ssh -o
+StrictHostKeyChecking=accept-new`) since the `Host *.taufiq.lab` wildcard's
+`StrictHostKeyChecking no` only matches when the *typed* destination itself
+ends in `.taufiq.lab` — a bare short alias like `linux-gh-runner` doesn't
+match that pattern, so its first-ever connection still prompts. Every other
+host in this config had already been through that one-time prompt in an
+earlier session, which is why it hadn't surfaced before. Verified: `ssh
+linux-vault` and `ssh linux-gh-runner` both connect cleanly now.
+
+### Conclusion
+
+One real gap found and fixed (`linux-gh-runner`'s missing DNS record, live
+since this CT was built and never caught because nobody had needed to SSH to
+it by name yet), plus the two SSH aliases it was blocking. Both items now
+crossed off `docs/09-github-actions-runner/actions-runner-setup.md`'s "Still
+Open" list. Every VM/CT in the fleet resolves by name from both Proxmox and
+a client, and connects by short SSH alias, as of this audit.
+
+---
+
 ## 13. Reference — All IPs and Names
 
 ### Quick Reference Card
@@ -1152,8 +1236,11 @@ tailscale ip -4   # run on the new VM
 # 2. Add record to dnsmasq on Proxmox
 echo "address=/new-vm.taufiq.lab/100.x.x.x" >> /etc/dnsmasq.conf
 
-# 3. Reload dnsmasq (no downtime)
-systemctl reload dnsmasq
+# 3. Restart dnsmasq — NOT reload. SIGHUP (what `reload` sends) does not
+# re-read new address= lines in the main config file, only /etc/hosts-style
+# files and the cache; confirmed directly in §12b after a new address= record
+# stayed NXDOMAIN post-reload and only resolved after a full restart.
+systemctl restart dnsmasq
 
 # 4. Test
 dig @127.0.0.1 new-vm.taufiq.lab
@@ -1167,8 +1254,8 @@ dig @127.0.0.1 new-vm.taufiq.lab
 ```bash
 # --- dnsmasq management ---
 systemctl status dnsmasq          # check if running
-systemctl reload dnsmasq          # reload config without restart
-systemctl restart dnsmasq         # full restart
+systemctl reload dnsmasq          # clears cache, re-reads /etc/hosts-style files — NOT new address= lines (see §12b)
+systemctl restart dnsmasq         # full restart — required after editing address= records in dnsmasq.conf
 dnsmasq --test                    # validate config syntax
 tail -f /var/log/dnsmasq.log      # watch live queries
 
