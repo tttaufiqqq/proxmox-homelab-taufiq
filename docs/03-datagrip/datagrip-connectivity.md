@@ -37,9 +37,9 @@ others (DNS hostname, `User & Password` auth) but aren't screenshotted below.
 |---|---|
 | Host | `linux-postgres.taufiq.lab` |
 | Port | 5432 |
-| Database | `workshop_2` |
+| Database | `workshop_2` (renamed `workshop_2_prod` 2026-07-20, alongside a new `workshop_2_dev` — see `Animal-Shelter-Workshop/CLAUDE.md`; `workshop_2` itself no longer exists on this server) |
 | User | `postgres` |
-| URL | `jdbc:postgresql://linux-postgres.taufiq.lab:5432/workshop_2` |
+| URL | `jdbc:postgresql://linux-postgres.taufiq.lab:5432/workshop_2_prod` |
 
 **Test Connection: Succeeded** — PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1), ping 30ms, SSL yes.
 

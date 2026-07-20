@@ -29,10 +29,14 @@ Library Management System still works" — the same reason
 Both are shared, multi-tenant instances, not infrastructure stood up specifically for
 this project:
 
-- The SQL Server host also serves `booking` and `workshop_2` databases for other,
-  unrelated projects. Library Management System connects through a login (`library_app`)
-  scoped to `db_datareader`/`db_datawriter` on the `Library` database only — it cannot
-  see or touch the other databases on that instance.
+- The SQL Server host previously also served `booking` and `workshop_2` databases for
+  Animal-Shelter-Workshop — stale as of 2026-07-20: `booking` was rewritten off SQL
+  Server onto MariaDB entirely (see `Animal-Shelter-Workshop/docs/01-architecture-migration.md`),
+  and that project no longer uses this host at all. Whether the old `booking`/`workshop_2`
+  schemas still physically exist on this SQL Server instance as unused leftovers wasn't
+  checked as part of that other work — not verified either way here. Library Management
+  System connects through a login (`library_app`) scoped to `db_datareader`/`db_datawriter`
+  on the `Library` database only — it cannot see or touch whatever else is on that instance.
 - The MinIO instance also serves GLM's `glm-product-images` bucket (see the
   [2026-07-17 GLM entry](../05-minio/minio-setup.md#2026-07-17--glm-project-bucket)
   in the MinIO doc). Library Management System has its own bucket
