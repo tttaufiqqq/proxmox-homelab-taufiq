@@ -303,21 +303,127 @@ detail: `Animal-Shelter-Workshop/docs/06-ansible.md` and `docs/09-production-har
 
 ---
 
+## Vault Agent — secrets stopped touching disk at runtime too (2026-07-20)
+
+**Status: done, run for real against the live box, rolled back and re-enabled once to confirm the
+rollback path itself works, both verified end-to-end.**
+
+### Why this exists
+
+The AppRole work above closed "secrets hardcoded in the repo," but everything it delivers still
+landed as **plaintext on app-server's disk** — `env-app.j2` rendered every secret into `.env` on
+every deploy, and `php artisan config:cache` then baked the same resolved values into
+`bootstrap/cache/config.php` a second time. Anyone with file read access to app-server (not just
+remote code execution) could read every credential. Flagged as a known, deliberate gap in a prior
+session; this is that follow-up, prompted by wanting a version that could be rolled back cheaply if
+running an extra always-on process turned out to be too much load for the Proxmox node. In
+practice the node had CPU essentially idle and ~23% RAM free at the time (Vault Agent itself uses
+tens of MB), so performance was never actually the constraint — but the rollback design was built
+in either way, and its rollback path was exercised for real, not just designed.
+
+### Design
+
+- New AppRole, `asw-app-server-agent`, bound to the same read-only `asw-deploy` policy but with a
+  `token_period` (periodic, renewable indefinitely) instead of the CLI deploy role's 15m/30m TTL —
+  the deploy role suits a short Ansible run; a long-running agent needs a token that renews itself.
+  `secret_id_ttl=0`, `secret_id_num_uses=0` (no expiry/use-limit) — matches this being a personal
+  homelab with no real data, same trust level as the deploy role's own secret already gets.
+- `Animal-Shelter-Workshop/infrastructure/ansible/playbooks/tasks/vault-agent.yml`, toggled by a new
+  `vault_agent_enabled` var (`group_vars/all.yml`). When `true`: installs the `vault` client,
+  deploys the AppRole's `role_id`/`secret_id` to `/etc/vault-agent/`, renders 3 Vault Agent configs
+  from one template (`agent-fpm.hcl`, `agent-migrate.hcl`, `agent-seed.hcl` — see "Bug 1" below for
+  why 3, not 1), and wraps php-fpm's systemd unit + the migrate/seed CLI tasks under `vault agent`.
+  `env-app.j2` blanks every Vault-sourced field in this mode (a Jinja `secret()` macro); `config:cache`
+  is skipped entirely (see "why not just wrap php-fpm" below). `vault_agent_enabled: false` fully
+  reverts: removes the systemd override, restarts php-fpm under normal supervision, and lets
+  `env-app.j2`/`config:cache` go back to the plain plaintext flow — **this direction was actually
+  run**, not just written, to confirm it really restores service.
+- **Why not just wrap php-fpm and call it done:** the obvious-looking design (wrap only the
+  php-fpm service) was rejected before deploying anything, because `config:cache` runs from the CLI
+  reading `.env` directly and would keep baking the same secrets into
+  `bootstrap/cache/config.php` regardless of what php-fpm's own process env held — that would move
+  the plaintext, not remove it. Both the CLI paths that need secrets (migrate/seed) and `config:cache`
+  had to be dealt with, not just the request-serving process.
+
+### Bugs found running this for real (in the order they were hit)
+
+1. **This Vault version (v2.0.3) has no CLI `-exec` flag.** The original design planned one shared
+   agent config with the command supplied via `vault agent -exec="..."` per invocation. `vault agent
+   -h` confirmed no such flag exists — the exec command has to live in the config file's own `exec`
+   stanza instead. This is why there are 3 rendered configs (`agent-fpm.hcl`/`agent-migrate.hcl`/
+   `agent-seed.hcl`) instead of one: each needs a different baked-in command. Caught the hard way —
+   the first attempt crashed php-fpm outright (`flag provided but not defined: -exec`), taking the
+   live site down (502) until the systemd override was removed and `.env` restored from a same-day
+   backup.
+2. **Sink-path permission mismatches.** php-fpm's config uses `/run/vault-agent/token`
+   (systemd's `RuntimeDirectory=`, root-owned — correct, since php-fpm's master also runs as root).
+   migrate/seed run as `become_user: taufiq`, which can't write there — they got their own sink
+   paths under `/etc/vault-agent/` instead. That directory itself was created `0750` (owner-only
+   write), which still blocked `taufiq`; fixed to `0770` so the group can actually write, not just
+   read/traverse.
+3. **`needrestart`'s interactive prompt hangs unattended `apt` installs.** Hit on `Install Node.js 20
+   LTS`, a task with no relation to Vault Agent at all — a non-pty Ansible `apt` install has no
+   terminal for needrestart's "which services should restart?" dialog to render to, so it hangs
+   indefinitely rather than erroring. `needrestart.conf`'s own `$nrconf{restart}='a'` wasn't
+   sufficient by itself; fixed with play-level `DEBIAN_FRONTEND=noninteractive`/`NEEDRESTART_MODE=a`.
+4. **A recursive `chmod 0775` was silently making tracked files executable.** Also unrelated to
+   Vault Agent specifically, but blocked every subsequent deploy once it happened: `Set storage and
+   cache permissions` used numeric mode + `recurse: true`, which applies identically to files and
+   directories — flipping 38 tracked files (images, `.gitignore`, `cacert.pem`) from `100644` to
+   `100755`. Git tracks that bit, so the next `git pull` failed with "local modifications exist,"
+   every time, forever, until fixed. Fixed with symbolic mode `u=rwX,g=rwX,o=rX`, which only grants
+   execute to directories.
+5. **`php-fpm`'s pool defaults to `clear_env=yes`.** Vault Agent injected secrets into the master
+   process correctly, php-fpm itself came up healthy — but every request still 500'd ("No
+   application encryption key has been specified"), because php-fpm wipes the environment for
+   worker processes by default, regardless of what the master process (which Vault Agent execs into)
+   was handed. Fixed by setting `clear_env = no` in `/etc/php/8.3/fpm/pool.d/www.conf`.
+6. **Vault Agent deduplicates `env_template` blocks by their literal `contents` string.** All 5 DB
+   connections share one app-level password (`db_password`), so all 5 `env_template` blocks
+   (`DB1_PASSWORD`..`DB5_PASSWORD`) had byte-identical `contents`. Only the last-declared one
+   (`DB5_PASSWORD`) actually got delivered to the running process — the other 4 read as `(unset)`,
+   confirmed directly via a temporary debug script hit over HTTP, which is how 4 of 5 databases
+   silently went "disconnected" even though php-fpm, the credential, and connectivity were all
+   otherwise fine. Fixed with an inert per-variable Go-template comment
+   (`{{/* DB1_PASSWORD */}}`, renders as nothing) appended to each, making the 5 templates'
+   *source text* unique without changing their rendered value.
+
+None of these 6 had ever been exercised before — same root cause as every bug found in the AppRole
+work above: this deploy path had never actually been run for real until this session.
+
+### Consequence worth stating plainly
+
+Runtime now depends on Vault being reachable, which it previously didn't (`config:cache`'s baked
+values meant an already-running app was unaffected if Vault went down after deploy). Every php-fpm
+*restart* — not just every deploy — now needs Vault Agent to successfully re-authenticate and render
+secrets, or php-fpm fails to start. Accepted tradeoff for a personal homelab with no real
+availability requirement; would need `restart_on_secret_changes`/retry tuning or a fallback path in
+a real production deployment.
+
+Full detail on the app side: `Animal-Shelter-Workshop/docs/09-production-hardening.md`'s "Secrets
+stopped touching disk entirely" section.
+
+---
+
 ## Still Open
 
-- **`Animal-Shelter-Workshop`'s Ansible playbook has been dry-run (`--check --diff`) against the
-  live box with `VAULT_ROLE_ID`/`VAULT_SECRET_ID` set, but not yet run for real.** The dry run
-  surfaced and closed several gaps before anything real changed — see
-  `Animal-Shelter-Workshop/docs/09-production-hardening.md` for the `FILESYSTEM_DISK` bug and the
-  `storage/.provisioned` seed-guard fix. A real (non-`--check`) run is the next step, separate from
-  this doc's scope.
+- ~~`Animal-Shelter-Workshop`'s Ansible playbook has been dry-run (`--check --diff`) against the
+  live box... but not yet run for real.~~ — **resolved.** Run for real multiple times this session
+  (see the Vault Agent section above), including a deliberate rollback-and-re-enable cycle to
+  confirm `vault_agent_enabled: false` genuinely restores service.
 - **A root-token value was pasted somewhere it didn't need to be during this work** (the cached
   `~/.vault-token` on `linux-vault` was used instead, so the pasted value was never actually
   needed). That token should be treated as burned — rotate/revoke it (`vault token revoke
   <token>`).
 - **No renewal automation for the `secret_id`**, unlike the GH runner's token-renewal timer — by
   design (see Step 4), but worth revisiting if this WSL-driven deploy flow becomes frequent enough
-  that a 90-day manual rotation gets annoying.
+  that a 90-day manual rotation gets annoying. The new `asw-app-server-agent` role shares this
+  design (also no rotation automation, also `secret_id_ttl=0` for the same reason).
 - **Vault still runs with `tls_disable = true`** (`docs/07-vault/vault-setup.md`). Fine behind
   Tailscale for DB-engine root passwords; now the app's own secrets (`APP_KEY` included) cross that
   same unencrypted listener too. Not blocking for a lab with no real data — noted, not fixed.
+- **Secret rotation requires a manual php-fpm restart to take effect**, since Vault Agent's exec
+  mode renders env vars once at process start, not live — `restart_on_secret_changes` in the config
+  affects the persistent php-fpm exec, but nothing currently triggers a restart automatically when
+  a secret actually changes in Vault. Not urgent while `secret_id`/DB passwords aren't rotating on
+  any schedule, but worth naming.
