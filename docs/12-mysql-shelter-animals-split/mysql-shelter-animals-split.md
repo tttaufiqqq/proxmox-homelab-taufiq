@@ -143,3 +143,12 @@ was deleted.
 
 msi's `workshop_2` database and `workshop_2` user were dropped after verification. msi remains
 the Ansible/WSL control node and local dev machine for this project — just no longer a DB host.
+
+---
+
+**Update, 2026-07-20 (same day, later):** the `workshop_2` database/user documented above on
+`linux-mysql`/`linux-mysql-2` were themselves later replaced by a DBA-style `workshop_2_prod` /
+`workshop_2_dev` split (same data, copied and row-count-verified into `workshop_2_prod`), and
+`linux-mysql`'s root password (`Password123!` above) was unified to `qwertY@1612` across all 5 DB
+servers. `workshop_2`/`workshop_2_test` still exist separately, scoped to the test suite only. Full
+detail: `Animal-Shelter-Workshop/CLAUDE.md`'s Database Connection Mapping.

@@ -422,8 +422,11 @@ stopped touching disk entirely" section.
 - **Vault still runs with `tls_disable = true`** (`docs/07-vault/vault-setup.md`). Fine behind
   Tailscale for DB-engine root passwords; now the app's own secrets (`APP_KEY` included) cross that
   same unencrypted listener too. Not blocking for a lab with no real data — noted, not fixed.
-- **Secret rotation requires a manual php-fpm restart to take effect**, since Vault Agent's exec
-  mode renders env vars once at process start, not live — `restart_on_secret_changes` in the config
-  affects the persistent php-fpm exec, but nothing currently triggers a restart automatically when
-  a secret actually changes in Vault. Not urgent while `secret_id`/DB passwords aren't rotating on
-  any schedule, but worth naming.
+- ~~Secret rotation requires a manual php-fpm restart to take effect~~ — **wrong, corrected after
+  real evidence.** When `db_password` was later patched in Vault (renaming the app's DB credential
+  to `workshop_2_prod` — see `Animal-Shelter-Workshop/CLAUDE.md`'s Database Connection Mapping),
+  php-fpm picked up the new value with no manual restart at all: `restart_on_secret_changes =
+  "always"` (already in `agent-fpm.hcl`) means Vault Agent's own watcher detects the change and
+  live-restarts the child process itself, invisible to systemd (`ActiveEnterTimestamp` on the unit
+  never moved). Confirmed via `getenv('DB1_PASSWORD')` showing the new 15-char value over HTTP
+  minutes after the Vault patch, with zero Ansible/systemd action taken in between.
