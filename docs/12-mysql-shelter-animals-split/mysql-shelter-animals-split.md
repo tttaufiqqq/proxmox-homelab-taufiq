@@ -152,3 +152,9 @@ the Ansible/WSL control node and local dev machine for this project — just no 
 `linux-mysql`'s root password (`Password123!` above) was unified to `qwertY@1612` across all 5 DB
 servers. `workshop_2`/`workshop_2_test` still exist separately, scoped to the test suite only. Full
 detail: `Animal-Shelter-Workshop/CLAUDE.md`'s Database Connection Mapping.
+
+**Update, 2026-07-20 (same day, later still):** the dump-restore into `workshop_2_prod` mentioned
+directly above preserved every stored procedure/trigger's original `DEFINER=workshop_2@%` clause —
+since `workshop_2` has no privileges on `workshop_2_prod`, this quietly broke every routine on both
+`shelter` and `animals`, discovered as a live production outage and fixed the same day. Full
+detail: [`docs/16-stored-routine-definer-privilege-split/`](../16-stored-routine-definer-privilege-split/stored-routine-definer-privilege-split.md).

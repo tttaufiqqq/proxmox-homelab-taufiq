@@ -83,3 +83,12 @@ hosts.
 Every one of `Animal-Shelter-Workshop`'s 5 Laravel connections now has its own dedicated
 physical host: `reporting` → `linux-mariadb`, `booking` → `linux-mariadb-2`, `shelter` →
 `linux-mysql`, `animals` → `linux-mysql-2`, `users` → `linux-postgres`.
+
+---
+
+**Update, 2026-07-20 (same day, later):** this split's dump-restore into what later became
+`workshop_2_prod` preserved every stored procedure/trigger's original `DEFINER=workshop_2@%`
+clause — since `workshop_2` has no privileges on `workshop_2_prod`, this quietly broke every
+routine on both `reporting` and `booking`, discovered as a live production outage and fixed the
+same day. Full detail:
+[`docs/16-stored-routine-definer-privilege-split/`](../16-stored-routine-definer-privilege-split/stored-routine-definer-privilege-split.md).
