@@ -1060,15 +1060,6 @@ prompted by a request to "set up DNS for services that don't have it yet."
 4. Checked `dnsmasq` service health, config syntax (`dnsmasq --test`), and tailed
    `/var/log/dnsmasq.log` to see the live queries land.
 
-### Finding: one undocumented VM, intentionally left out of DNS
-
-`qm list` showed **VM 100, `fyp-hanim`** (stopped), running on the same Proxmox
-host but absent from this repo's inventory (§1) and from `/etc/dnsmasq.conf`. It
-is not part of this homelab's database services — it appears to be an unrelated
-project sharing the hypervisor — so it was deliberately excluded from
-`taufiq.lab` DNS rather than added. Recorded here so a future audit doesn't
-mistake it for a gap.
-
 ### Finding: every in-scope service already resolves
 
 Every VM/CT actually in this repo's inventory (§1) already had an `address=`
@@ -1124,8 +1115,8 @@ No new `address=` records were needed — every service this repo documents was
 already covered as of the 2026-07-17 update in §8. This audit is the
 verification step itself: it's the first time all records were checked from a
 real client over Split DNS rather than just from the Proxmox host, and it
-surfaced the `fyp-hanim` scope question and the `app-server` alias drift, both
-now recorded above instead of silently sitting undiscovered.
+surfaced the `app-server` alias drift, now recorded above instead of silently
+sitting undiscovered.
 
 ---
 
