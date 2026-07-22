@@ -275,14 +275,14 @@ EOF
 chmod +x /etc/profile.d/99-custom-motd.sh
 ```
 
-This host also can't install `figlet` — its Tailscale-managed DNS returns
-`SERVFAIL` for `yum.oracle.com` (same underlying issue as `linux-vault` in
-Notes item 1, just hitting `dnf` instead of `apt`, and no same-distro peer
-in this fleet to borrow a compatible package from). Rather than touch this
-VM's network config for a cosmetic effect, this was left as-is — the script's
-`print_banner()` already has a plain-text fallback (`== $HOST ==`) for when
-`figlet` isn't installed, so the role/stats/health-check lines still show
-correctly, just without ASCII art.
+This host's `dnf` also can't reach `yum.oracle.com` by default — same family
+of Tailscale-DNS gap as `linux-vault` in Notes item 1, root-caused and fixed
+properly in Notes item 11 (a temporary `nameserver 1.1.1.1` line, `dnf
+install oracle-epel-release-el8` since `figlet` is EPEL-only on Oracle Linux,
+then reverting the DNS change). If that fix hasn't been applied yet, the
+script's `print_banner()` still has a plain-text fallback (`== $HOST ==`) for
+whenever `figlet` isn't installed, so the role/stats/health-check lines show
+correctly either way.
 
 ---
 
@@ -397,7 +397,7 @@ second pass once they came up — see the per-host notes below.
 | `linux-mariadb` | **Installed and verified live**, currently on — real hostname is legacy `workshop-2`, initially fell through to "General Purpose Server" until fixed, see Notes item 9 |
 | `linux-postgres` | **Installed and verified live**, currently on |
 | `spring-boot-app` | **Installed and verified live**, currently on |
-| `linux-oracle-db` | **Installed and verified live**, currently on — via `/etc/profile.d/` instead of `/etc/update-motd.d/` (Oracle Linux, see Step 2b); no figlet art (DNS-blocked `dnf install`), falls back to plain text |
+| `linux-oracle-db` | **Installed and verified live**, currently on — via `/etc/profile.d/` instead of `/etc/update-motd.d/` (Oracle Linux, see Step 2b); `figlet` installed via EPEL after working around a tailnet-wide DNS gap (see Notes item 11), full ASCII art renders |
 
 "Currently powered off" hosts will show the banner again the next time
 they're brought up — nothing further needs doing for them.
@@ -417,7 +417,8 @@ survives, on all 13 hosts in the fleet: `linux-mysql-2`, `linux-gh-runner`,
 `linux-app-server`, `linux-sql-server`, `linux-vault`, `linux-mariadb-2`,
 `linux-mongodb`, `linux-mini-io`, `linux-mysql`, `linux-mariadb`,
 `linux-postgres`, `spring-boot-app`, and `linux-oracle-db` (the last via the
-`/etc/profile.d/` path, plain-text fallback instead of figlet art).
+`/etc/profile.d/` path, full figlet ASCII art once EPEL was enabled — see
+Notes item 11).
 
 ![linux-app-server (orange) and linux-gh-runner (cyan) MOTD banners, each with its own fixed accent color, plain big font, no update noise](motd-per-host-colors.png)
 
@@ -508,10 +509,31 @@ Issues found and fixed while rolling this out across the live hosts above:
     `sudoers` at all (documented separately in
     [`docs/01-oracle/oracle-install.md`](../01-oracle/oracle-install.md)'s
     "Root Privilege Escalation" section) — used `su -` throughout instead of
-    `sudo`. `figlet` couldn't be installed there either, for the same
-    Tailscale-DNS reason as `linux-vault`; left using the script's built-in
-    plain-text fallback rather than touching this VM's network config for a
-    cosmetic effect.
+    `sudo`.
+11. **Figured out why `dnf`/`apt` fail to resolve public domains on
+    `linux-vault` and `linux-oracle-db` (root cause, not just a workaround)
+    — and fixed `figlet` on `linux-oracle-db` properly instead of leaving it
+    on the plain-text fallback.** `dnsmasq` on the Proxmox host resolves
+    public domains fine on its own (`nslookup yum.oracle.com 100.97.8.93`
+    works, and its config has `server=8.8.8.8`/`server=1.1.1.1` forwarders
+    set correctly) — the break is specifically in Tailscale's local DNS stub
+    (`100.100.100.100`) on each Linux guest, which forwards `*.taufiq.lab`
+    split-DNS queries to `dnsmasq` correctly but has no fallback for
+    everything else, so any non-tailnet domain just `SERVFAIL`s. This is a
+    tailnet-wide DNS setting (likely a missing "Global nameserver" in the
+    Tailscale admin console), not something fixable per-host, and out of
+    scope to change here since it'd affect every device on the tailnet.
+    Worked around it per-host instead: temporarily appended `nameserver
+    1.1.1.1` to `/etc/resolv.conf` (Tailscale normally owns this file and
+    warns not to hand-edit it, but doesn't fight a manual edit either),
+    installed `oracle-epel-release-el8` (figlet isn't in Oracle Linux's base
+    repos, only EPEL) then `figlet` itself, removed the temporary
+    `nameserver` line, and ran `tailscale set --accept-dns=true` to restore
+    normal Tailscale-managed DNS. `linux-oracle-db` now shows full figlet
+    ASCII art like every other host instead of the plain-text fallback.
+    (`linux-vault`'s `figlet` was left as installed via the borrowed-`.deb`
+    method in item 1 — same root cause, already resolved there before this
+    was diagnosed.)
 
 ![linux-gh-runner MOTD banner, first successful live verification — plain big font, before the color pass above](linux-gh-runner-first-verify.png)
 
