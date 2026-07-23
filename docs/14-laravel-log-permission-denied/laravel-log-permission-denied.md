@@ -1,7 +1,8 @@
 # `app-server`: Laravel couldn't write its own log file, and it took the whole app down with it
 
 **Date:** 2026-07-20
-**Goal:** Two unrelated-looking pages on `Animal-Shelter-Workshop` broke within the same session —
+**Goal:** Two unrelated-looking pages on
+[`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) broke within the same session —
 booking confirmation (`/bookings/238/confirm`, 500) and the animal-matching modal
 (`/animal-matches`, "Something went wrong"). Same day as the
 [`reporting`/`booking` split](../13-mariadb-reporting-booking-split/mariadb-reporting-booking-split.md),

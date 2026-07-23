@@ -1,7 +1,8 @@
 # GLM Project — Database Access & DBA Notes
 
 Quick-reference for connecting to and administering the `GLM_APP` schema
-(Green Lifestyle Market backend, `FREEPDB1` on `linux-oracle-db`). Full
+(Green Lifestyle Market backend — [`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market)
+— `FREEPDB1` on `linux-oracle-db`). Full
 Oracle connectivity background lives in
 [`docs/03-datagrip/datagrip-connectivity.md`](../03-datagrip/datagrip-connectivity.md) —
 this doc only covers what's specific to this one project. For how GLM is hosted,

@@ -243,8 +243,10 @@ intervention needed — matches the result from the original test above.
 
 ## 2026-07-17 — GLM project bucket
 
-Green Lifestyle Market (the other project in this homelab, `C:\Users\taufi\Documents\Dev\
-green-lifestyle-market`) now uses this MinIO instance for product image storage — see its
+Green Lifestyle Market (the other project in this homelab —
+[`green-lifestyle-market`](https://github.com/tttaufiqqq/green-lifestyle-market), local checkout
+`C:\Users\taufi\Documents\Dev\green-lifestyle-market`) now uses this MinIO instance for product
+image storage — see its
 `docs/adr/0006-minio-object-storage.md`. Bucket `glm-product-images` created, plus a dedicated
 least-privilege access key (`glmapp-8ef65fc5270a`) scoped to only that bucket via an inline policy
 (`glm-app-policy`: GetObject/PutObject/DeleteObject/ListBucket on `glm-product-images` and

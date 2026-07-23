@@ -3,7 +3,9 @@
 **Date:** 2026-07-20
 **Goal:** Right after fixing the
 [log permission bug](../14-laravel-log-permission-denied/laravel-log-permission-denied.md), the
-admin backups panel 500'd too. Same server, same afternoon, but this one turned out to be a
+admin backups panel on
+[`Animal-Shelter-Workshop`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop) 500'd too.
+Same server, same afternoon, but this one turned out to be a
 different shape of problem — not accidental drift, a setting that was *intentionally* locked down
 now directly blocking a feature that's supposed to read from the same place.
 
