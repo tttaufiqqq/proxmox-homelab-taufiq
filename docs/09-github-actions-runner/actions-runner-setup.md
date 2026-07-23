@@ -256,6 +256,9 @@ login session.
 | `psql` client | talks to the `users` (PostgreSQL) connection |
 | `jq` | parsing JSON in workflow steps |
 | `vault` (v2.0.3, matching every other host in the lab) | pulling DB creds at job time — see below |
+| `ansible` (2.16.3, apt) + `sshpass` | runs `.github/workflows/deploy.yml` (CD) against the fleet — see "CD Integration" below |
+| `community.mysql`, `community.postgresql`, `community.general`, `community.hashi_vault` (Ansible Galaxy collections) | the exact set `Animal-Shelter-Workshop/infrastructure/ansible/requirements.yml` declares |
+| `python3-pymysql`, `python3-psycopg2`, `hvac` (pip) | Python client libs the above collections' modules need — none are pulled in by the collections themselves |
 
 Deliberately **not** installed: PHP, Composer, Node, or any app-language
 runtime. Those belong to whatever workflow file actually needs them, not the
@@ -268,7 +271,82 @@ with no sandbox/seccomp issues inside this unprivileged LXC. Removed both
 again afterward; the workflow provisions them itself per-job via
 `actions/setup-node`.
 
+Ansible is the one deliberate exception to the "no app runtimes" rule above
+— it's deploy tooling this runner uses directly to configure the fleet, not
+something a workflow provisions per-job the way Node/PHP are. Unlike
+Node/PHP, there's no equivalent of `actions/setup-node` for "install Ansible
+for this one job," and CD needs it on every run, so it lives on the base
+image instead.
+
 ---
+
+## CD Integration
+
+`Animal-Shelter-Workshop/.github/workflows/deploy.yml` runs on this same
+runner immediately after `tests.yml` passes on `main`, converging app-server
+(and, when their playbooks changed, the 5 DB hosts) to the tested commit.
+Full design: [`Animal-Shelter-Workshop/docs/12-cd.md`](https://github.com/tttaufiqqq/Animal-Shelter-Workshop/blob/main/docs/12-cd.md).
+This section covers only what changed on this side — the runner and the lab's
+Vault/UFW config.
+
+### Dedicated CD SSH keypair
+
+CD does not reuse the lab-wide admin key (`~/.ssh/id_ed25519` on `msi`). A
+separate `ed25519` keypair was generated (`gh-runner-cd` comment) and its
+public half appended to `authorized_keys` for each host's own SSH user on
+all 6 fleet machines (`taufiq@app-server`, `workshop-mysql@linux-mysql`,
+`linux-mysql-2@linux-mysql-2`, `workshop-2@linux-mariadb`,
+`linux-mariadb-2@linux-mariadb-2`, `workshop-postgres@linux-postgres`). The
+private half was never left on disk anywhere — generated in a scratch
+location, written straight into Vault (below), then shredded. Independently
+revocable from the admin key: a compromised CD credential can be rotated
+without touching how a human logs in to any of these boxes.
+
+### `secret/asw-cd` — a new Vault path, one policy line
+
+A new KV path holds everything CD needs at job runtime: the CD SSH private
+key, the fleet's shared become/root password, and the `asw-deploy` /
+`asw-app-server-agent` AppRole id/secret pairs that
+`Animal-Shelter-Workshop/infrastructure/ansible/group_vars/all.yml` already
+reads via `lookup('env', ...)`. The existing `gh-runner` policy (see "Vault
+Integration" below) was extended with exactly one new stanza:
+
+```hcl
+path "secret/data/asw-cd" {
+  capabilities = ["read"]
+}
+```
+
+Policy writes apply to a token's *existing* grants immediately — no token
+re-issue, no change to `~/actions-runner/.env`. Verified the scoping still
+holds after the edit: `vault kv get -field=become_password secret/asw-cd`
+succeeds from this runner; `vault kv get secret/oracle` still returns a
+403, exactly as before.
+
+### UFW — `100.72.6.40` allowed on all 6 fleet hosts
+
+Every playbook in `Animal-Shelter-Workshop/infrastructure/ansible/playbooks/`
+(`app-server.yml` and all five `linux-*.yml`) previously only allowed SSH
+from `100.68.235.121` (`msi`, the human admin machine) over `tailscale0`.
+Each now has a second identical rule for `100.72.6.40` (this CT's Tailscale
+IP), so the runner can reach every host CD needs to configure. Landing this
+rule required one bootstrap run of the fleet's playbooks from `msi` (the only
+machine the *old* UFW rules let in) — CD cannot SSH anywhere until that
+one-time run has happened at least once.
+
+### Two more pre-existing bugs found while bootstrapping this
+
+Neither is specific to CD or to this runner — both were latent bugs in
+`Animal-Shelter-Workshop`'s own Ansible playbooks that this bootstrap run
+happened to be the first thing to actually exercise since they were
+introduced. Full detail in `Animal-Shelter-Workshop/docs/12-cd.md`'s incident
+log: the 2026-07-20 DB root-password unification silently broke
+`login_unix_socket` auth on all 4 MySQL/MariaDB hosts (root's auth plugin
+switched to `mysql_native_password`, which does check a password, the moment
+a password was set on it), and `linux-postgres.yml` was missing the same
+`acl` package `app-server.yml` already installs for `become_user`
+privilege de-escalation. Both fixed in the app repo, nothing changed on
+this CT for either.
 
 ## Vault Integration — Scoped Token, Not the Root Token
 
@@ -388,9 +466,18 @@ test.
 - CT chosen over VM — same reasoning as `linux-vault`/`linux-mongodb`: pure
   network/API workload, no dedicated kernel needed, and the host is still
   CPU-capped at 4 cores even after the RAM upgrade
-- Repo (`Animal-Shelter-Workshop`) must stay **private** for as long as this
+- ~~Repo (`Animal-Shelter-Workshop`) must stay **private** for as long as this
   runner is attached — a public repo + self-hosted runner is a known RCE
-  vector via PRs
+  vector via PRs~~ — **superseded 2026-07-20.** The repo is actually public
+  (confirmed via the GitHub API, `"private": false`) and that's intentional —
+  it's a portfolio demo repo, not something built around a private-by-default
+  threat model. The RCE-via-PR risk this bullet warned about is still real in
+  the abstract (this runner's Vault token reaches every DB in the lab), so
+  whether GitHub's fork-PR-approval gate (**Settings → Actions → General →
+  Fork pull request workflows**) is actually enabled needs manual
+  confirmation — it could not be checked from the environment that did this
+  audit (no `gh` CLI or API token available). Flagged, not yet verified;
+  see `Animal-Shelter-Workshop/docs/12-cd.md`'s "Known follow-up" section.
 - Vault token is scoped read-only to `mysql`/`mariadb`/`postgres`, capped at
   768h by Vault's `max_ttl` — renewed automatically by a daily systemd timer
   (see "Vault Token Renewal" above)

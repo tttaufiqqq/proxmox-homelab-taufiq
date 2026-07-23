@@ -1,0 +1,3 @@
+# JetBrains IDE (PhpStorm/DataGrip) project files — local editor state, not docs
+.idea/
+*.iml
