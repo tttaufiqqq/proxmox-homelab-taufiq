@@ -66,4 +66,8 @@ spring-boot-app
 
 All 13 VMs/CTs plus the Proxmox host have a working SSH alias, verified end-to-end (not just "config looks right" — each one was actually connected to and confirmed with `whoami`/`hostname`). This is a local `~/.ssh/config` change only, not part of this git repo, so there's nothing to commit for it — this doc is the record of it instead.
 
+Independently re-confirmed from my own terminal afterward — `ssh spring-boot-app` logs straight in (full MOTD banner, no host-key prompt), and re-running the network segmentation isolation checks from there reproduced the exact same results as the plan doc's Proof section (Oracle allowed, MySQL blocked, Management blocked, internet allowed):
+
+![ssh spring-boot-app logging in cleanly and reproducing the exact same isolation test results independently](images/proof-alias-and-isolation-independently-verified.png)
+
 Still-open, pre-existing item unrelated to this fix: `app-server.taufiq.lab` itself still doesn't resolve (only the `linux-app-server` / `app.taufiq.lab` forms work) — tracked in `docs/02-dns/dns-setup.md` §12, not touched here.
