@@ -523,18 +523,19 @@ narrative with screenshots:
 
 ### Proof
 Screenshots and command output backing up the claims above. Images live in
-`homelab-network-segmentation-execution-plan.assets/` next to this file —
-same convention any future top-level plan doc in this repo should reuse.
+[`docs/18-network-segmentation/images/`](docs/18-network-segmentation/images/)
+alongside the narrative write-up, since this plan doc and that doc cover the
+same execution — no separate assets folder needed just for this file.
 
 **Every VM/CT tagged onto its correct VLAN, all 13 running:**
-![VLAN tags on every net0 line, qm/pct list showing everything running](homelab-network-segmentation-execution-plan.assets/proof-01-vlan-tags-and-status.png)
+![VLAN tags on every net0 line, qm/pct list showing everything running](docs/18-network-segmentation/images/17-proof-vlan-tags-and-status.png)
 
 **Every guest reachable at its reserved IP** (from the Proxmox host, via the
 `10.0.0.0/8` route through OPNsense):
-![Every VLAN 20/30/40 IP responding to ping](homelab-network-segmentation-execution-plan.assets/proof-02-all-ips-reachable.png)
+![Every VLAN 20/30/40 IP responding to ping](docs/18-network-segmentation/images/18-proof-all-ips-reachable.png)
 
 **VLANs 50/60/70/80 confirmed still empty** — no guest tagged to any of them:
-![No output from grepping for tag=50/60/70/80 across every guest](homelab-network-segmentation-execution-plan.assets/proof-03-vlans-50-60-70-80-empty.png)
+![No output from grepping for tag=50/60/70/80 across every guest](docs/18-network-segmentation/images/19-proof-vlans-50-60-70-80-empty.png)
 
 **Isolation rules, tested from the actual VMs they apply to** (not from the
 unrestricted Management VLAN, which would trivially pass everything and
@@ -566,3 +567,9 @@ PASS
 ```
 
 All 8 results match what the plan calls for.
+
+Independently reproduced afterward, from the user's own terminal rather than
+mine — same results both times:
+
+![app-server's own terminal reproducing the exact same VLAN 40 isolation results](docs/18-network-segmentation/images/15-app-server-isolation-verified-by-user.png)
+![spring-boot-app's own terminal reproducing the exact same VLAN 30 isolation results](docs/18-network-segmentation/images/16-spring-boot-app-isolation-verified-by-user.png)

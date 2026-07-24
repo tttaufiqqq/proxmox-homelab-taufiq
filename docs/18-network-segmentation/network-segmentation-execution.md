@@ -120,4 +120,9 @@ g_vfs_done(): iso9660/OPNSENSE_INSTALL[READ(offset=...,length=2048)]error = 5
 
 All 13 VMs/CTs are tagged onto their correct VLAN, booted, and confirmed reachable at their reserved IPs. Firewall rules for the 3 active VLANs (20/30/40) are in place and tested end-to-end: DB tier isolated from Personal, Personal blocked from reaching App/Secrets and DB, the one specific Spring Boot → Oracle path works, internet access works everywhere it should, and Management stays unreachable from every VLAN except the Proxmox host itself. VLANs 50/60/70/80 stay reserved and ruleless until something actually gets deployed there.
 
+Independently reproduced afterward from the user's own terminal, not mine — same results both times:
+
+![app-server's own terminal reproducing the exact same VLAN 40 isolation results](images/15-app-server-isolation-verified-by-user.png)
+![spring-boot-app's own terminal reproducing the exact same VLAN 30 isolation results](images/16-spring-boot-app-isolation-verified-by-user.png)
+
 Full step-by-step execution log (commands run, exact config) lives in `homelab-network-segmentation-execution-plan.md`'s Execution Log section — this doc is the narrative version of the same work.

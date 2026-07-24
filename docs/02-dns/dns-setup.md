@@ -21,6 +21,7 @@
 11. [Final Verification Results](#11-final-verification-results)
 12. [Coverage Audit — 19 July 2026](#12-coverage-audit--19-july-2026)
 13. [Reference — All IPs and Names](#13-reference--all-ips-and-names)
+14. [SSH Alias Coverage — 24 July 2026](#14-ssh-alias-coverage--24-july-2026)
 
 ---
 
@@ -1272,8 +1273,47 @@ icacls $env:USERPROFILE\.ssh\config    # check permissions
 
 ---
 
+## 14. SSH Alias Coverage — 24 July 2026
+
+### What I Built
+
+Added `Host` blocks in `~/.ssh/config` for the three guests that had none at all: `spring-boot-app`, `linux-mongodb`, and `linux-mini-io`. Every VM/CT in the fleet, plus the Proxmox host itself, now has a working short SSH alias.
+
+### Why I Built It
+
+Found the gap by accident while testing DNS-based SSH access to `spring-boot-app` and `app-server` during unrelated network segmentation work. That surfaced two separate things: `app-server.taufiq.lab` itself still doesn't resolve (already flagged as a stale alias below in §12 — nothing new there), and, separately, `linux-mongodb` and `linux-mini-io` turned out to have valid DNS records but had simply never had an SSH config entry written for them at all.
+
+### What Broke, How I Found It, and How I Recovered
+
+**1. Didn't know the login username for two of the three**
+
+Broke: guessing `linux-mini-io`'s username — tried `mini-io`, `minio`, and `taufiq` — got `Permission denied (publickey,password)` on every attempt.
+
+Found it: every CT/VM added to this config in recent sessions (`linux-vault`, `linux-gh-runner`, `linux-mysql-2`, `linux-mariadb-2`) uses its own hostname as the login username. Tried that pattern directly instead of continuing to guess.
+
+Recovered: `linux-mongodb` and `linux-mini-io` both worked immediately once tested against that pattern, confirmed via `whoami` returning the expected username on each.
+
+**2. `spring-boot-app`'s alias failed with "Host key verification failed" on first use**
+
+Broke: `ssh spring-boot-app` (the freshly-added alias) failed outright — not even a yes/no prompt, an immediate failure.
+
+Found it: the wildcard block (`Host *.taufiq.lab`, setting `StrictHostKeyChecking no`) only matches when the *typed* destination itself ends in `.taufiq.lab` — a bare short alias doesn't match that pattern, so it doesn't inherit the auto-accept. This is the exact same quirk already documented below in §12b for `linux-vault`/`linux-gh-runner`'s first connections; it just hadn't come up for `spring-boot-app` before since nothing had connected to it by that alias yet.
+
+Recovered: connected once via the full FQDN (`ssh spring-boot-app.taufiq.lab`), which does match the wildcard and silently cached the host key. The short alias worked cleanly immediately after.
+
+### Where Things Stand
+
+All 13 VMs/CTs plus the Proxmox host have a working SSH alias — each one actually connected to and confirmed with `whoami`/`hostname`, not just "config looks right." Independently re-verified afterward from the user's own terminal: logging in via the new `spring-boot-app` alias and re-running the network segmentation isolation checks from there reproduced identical results to the ones already recorded in `homelab-network-segmentation-execution-plan.md`'s Proof section.
+
+![ssh spring-boot-app logging in cleanly via the new alias and reproducing the same isolation test results independently](ssh-alias-coverage-spring-boot-app.png)
+
+This is a local `~/.ssh/config` change only, not part of this git repo — this section is the record of it.
+
+---
+
 *Documentation generated: 2 July 2026*  
 *Last coverage audit: 19 July 2026 — see §12*  
+*SSH alias coverage completed: 24 July 2026 — see §14*  
 *Lab domain: taufiq.lab*  
 *DNS server: dnsmasq on Proxmox (100.97.8.93)*  
 *VPN mesh: Tailscale*
