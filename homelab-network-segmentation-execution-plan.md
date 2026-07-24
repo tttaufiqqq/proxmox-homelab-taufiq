@@ -426,11 +426,56 @@ Per Decision 11, no dnsmasq changes needed for DHCP — confirmed live config
 still matches that assumption (Tailscale-only DNS, no DHCP directives).
 
 ### Step 4 — Create the OPNsense router VM ⏳ in progress, handed off
-Created VM 200 (`opnsense`) via `qm create`: 2 vCPU, 2GB RAM, 20GB disk
-(`local:200/vm-200-disk-0.qcow2`), OPNsense 26.7 DVD ISO attached as boot
-media (`boot=order=ide2;scsi0`), 9 NICs — one untagged WAN (net0) plus one
-tagged NIC per VLAN, including the reserved ones (net1–net8 = VLAN
-10/20/30/40/50/60/70/80). Booted it into the installer.
+Created VM 200 (`opnsense`) via `qm create`: originally 2 vCPU / 2GB RAM,
+20GB disk (`local:200/vm-200-disk-0.qcow2`), OPNsense 26.7 DVD ISO attached
+as boot media, 9 NICs — one untagged WAN (net0) plus one tagged NIC per VLAN,
+including the reserved ones (net1–net8 = VLAN 10/20/30/40/50/60/70/80).
+
+**Bumped RAM from 2GB to 4GB mid-install:** bsdinstall refused to proceed at
+2GB, warning that copying the live filesystem to disk wants at least 3000MB.
+Rather than force it through on a warning, stopped the VM (safe — nothing had
+been written to disk yet), `qm set 200 --memory 4096`, restarted. Host had
+plenty of headroom (8.6GB free at the time) so no reason not to just fix it
+properly.
+
+**Why VMID 200, not the next number in sequence (114):** every existing
+guest is either 10x/11x (workloads) or 9000 (template). Gave the router its
+own visually distinct range instead, with headroom (114–199) left for future
+guests before it ever collides with infrastructure IDs.
+
+Booted it into the installer — hit a real error on first boot:
+```
+g_vfs_done(): iso9660/OPNSENSE_INSTALL[READ(offset=...,length=2048)]error = 5
+```
+`error = 5` is FreeBSD's `EIO`. First guess was a known Proxmox/QEMU quirk
+with BSD-based installer ISOs on the emulated **IDE** CD-ROM controller, so I
+moved the ISO to **SATA** instead (`qm set 200 --delete ide2`, reattached as
+`--sata0 ...`, boot order `order=sata0;scsi0`). **That guess was wrong** — the
+exact same offsets failed again afterward, which ruled out the controller
+entirely (a real emulation bug wouldn't fail at identical byte offsets
+regardless of bus). Identical failures on two different buses means the data
+itself wasn't there.
+
+Confirmed the real cause by downloading the image directly on the Proxmox
+host (bypassing the Windows browser download entirely) and checking it
+against OPNsense's published checksum:
+```bash
+curl -fsSL -O https://pkg.opnsense.org/releases/26.7/OPNsense-26.7-checksums-amd64.sha256
+curl -fSL -o OPNsense-26.7-dvd-amd64.iso.bz2 https://pkg.opnsense.org/releases/26.7/OPNsense-26.7-dvd-amd64.iso.bz2
+grep 'dvd-amd64.iso.bz2' OPNsense-26.7-checksums-amd64.sha256 | sha256sum -c -
+# OPNsense-26.7-dvd-amd64.iso.bz2: OK
+bunzip2 -k OPNsense-26.7-dvd-amd64.iso.bz2
+```
+The verified, decompressed image is **2,101,714,944 bytes**. The file
+already sitting in Proxmox's ISO storage (from the original Windows download)
+was only **1,843,724,288 bytes** — short by ~258MB. **The original download
+was truncated, not corrupted in transit.** Every failing read offset landed
+past the truncated file's end but inside the real image, which is exactly why
+it failed identically on both IDE and SATA — the bus was never the problem.
+Replaced the bad file in `/var/lib/vz/template/iso/` with the verified one,
+refreshed the VM's `sata0` metadata (`size` auto-updated to `2052456K`),
+restarted. The SATA change from the first attempt is harmless and left in
+place, but it wasn't the actual fix.
 
 MAC-to-role table, for matching interfaces during OPNsense's own assignment
 menu (it lists each interface's MAC):
@@ -463,3 +508,15 @@ partitioning step. Handoff:
 
 Steps 5–9 (VLAN-tag every VM/CT, boot up, firewall rules, isolation testing,
 Tailscale check) still to come once OPNsense is live.
+
+### Steps 5–9 ✅ complete
+OPNsense install finished, all 13 VMs/CTs tagged and re-tested at their
+reserved IPs, firewall rules in place for VLANs 20/30/40, isolation confirmed
+in both directions (specific allows work, everything else correctly blocked,
+internet access preserved), Tailscale confirmed unaffected on every host.
+Several real bugs surfaced and got fixed along the way — a truncated
+installer ISO, a firewall design gap that blocked OPNsense's own DNS
+resolver, and two separate per-VM host firewalls (`firewalld` on Oracle
+Linux, `ufw` on Ubuntu) gating traffic independently of any VLAN rule. Full
+narrative with screenshots:
+[`docs/18-network-segmentation/network-segmentation-execution.md`](docs/18-network-segmentation/network-segmentation-execution.md).
