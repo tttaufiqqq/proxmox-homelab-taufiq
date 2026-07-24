@@ -520,3 +520,49 @@ resolver, and two separate per-VM host firewalls (`firewalld` on Oracle
 Linux, `ufw` on Ubuntu) gating traffic independently of any VLAN rule. Full
 narrative with screenshots:
 [`docs/18-network-segmentation/network-segmentation-execution.md`](docs/18-network-segmentation/network-segmentation-execution.md).
+
+### Proof
+Screenshots and command output backing up the claims above. Images live in
+`homelab-network-segmentation-execution-plan.assets/` next to this file —
+same convention any future top-level plan doc in this repo should reuse.
+
+**Every VM/CT tagged onto its correct VLAN, all 13 running:**
+![VLAN tags on every net0 line, qm/pct list showing everything running](homelab-network-segmentation-execution-plan.assets/proof-01-vlan-tags-and-status.png)
+
+**Every guest reachable at its reserved IP** (from the Proxmox host, via the
+`10.0.0.0/8` route through OPNsense):
+![Every VLAN 20/30/40 IP responding to ping](homelab-network-segmentation-execution-plan.assets/proof-02-all-ips-reachable.png)
+
+**VLANs 50/60/70/80 confirmed still empty** — no guest tagged to any of them:
+![No output from grepping for tag=50/60/70/80 across every guest](homelab-network-segmentation-execution-plan.assets/proof-03-vlans-50-60-70-80-empty.png)
+
+**Isolation rules, tested from the actual VMs they apply to** (not from the
+unrestricted Management VLAN, which would trivially pass everything and
+prove nothing — first attempt at this made exactly that mistake, caught and
+rerun correctly):
+
+From `spring-boot-app` (VLAN 30):
+```
+Oracle:1521 (expect PASS):
+PASS
+mysql:3306 (expect FAIL):
+FAIL
+Management 10.0.10.1 (expect FAIL):
+FAIL
+internet 1.1.1.1 (expect PASS):
+PASS
+```
+
+From `app-server` (VLAN 40):
+```
+Oracle:1521 (expect FAIL):
+FAIL
+spring-boot 10.0.30.2 (expect FAIL):
+FAIL
+Management 10.0.10.1 (expect FAIL):
+FAIL
+internet 1.1.1.1 (expect PASS):
+PASS
+```
+
+All 8 results match what the plan calls for.
