@@ -599,3 +599,5 @@ swap, disk, local IP, and locale. Scripted/non-interactive SSH commands
 against this host (including the Step 5 rollout loop) stay clean — verified
 both cases directly: an interactive `bash -ic` session shows the banner, a
 plain scripted command does not.
+
+![ssh proxmox showing fastfetch's built-in Proxmox VE logo and host stats on real interactive login](proxmox-host-fastfetch-splash.png)
