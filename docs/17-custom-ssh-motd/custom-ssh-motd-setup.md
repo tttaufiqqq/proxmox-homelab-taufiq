@@ -601,3 +601,152 @@ both cases directly: an interactive `bash -ic` session shows the banner, a
 plain scripted command does not.
 
 ![ssh proxmox showing fastfetch's built-in Proxmox VE logo and host stats on real interactive login](proxmox-host-fastfetch-splash.png)
+
+---
+
+## Addendum (2026-07-24) — VLAN / Subnet ASCII Diagrams
+
+**Scope:** Reference diagrams for the network segmentation work in
+[`docs/18-network-segmentation/network-segmentation-execution.md`](../18-network-segmentation/network-segmentation-execution.md)
+and `homelab-network-segmentation-execution-plan.md` (repo root) — included
+here alongside the fastfetch addendum above as a snapshot of the fleet's
+current network layout. Also saved standalone as
+`vlan-subnet-diagram.txt` in Downloads.
+
+Device names below are the SSH aliases from `~/.ssh/config`, same as the
+"Current Fleet" table earlier in this doc. Three of those aliases differ from
+what `hostname` actually reports on the box — see the "Real hostname vs. SSH
+alias caveat" earlier in this doc for the full story (`linux-mysql` /
+`workshop-mysql`, `linux-postgres` / `workshop-postgres`, `linux-mariadb` /
+`workshop-2`). Doesn't affect the VLAN/subnet assignments below, but matters
+if anything ever matches on `$(hostname)` instead of the alias.
+
+`[DOWN]` markers below reflect the fleet-wide shutdown performed the same
+day (every guest except OPNsense powered off intentionally, not a fault) —
+the VLAN/subnet design and firewall rules themselves are the standing
+configuration, not tied to today's power state.
+
+```
+====================================================================
+  taufiq.lab -- VLAN / Subnet Diagram
+  Router: OPNsense (VM 200)  |  Node: taufiq (Proxmox VE 9.1.1, 10FLS2CH00)
+  Generated: 2026-07-24
+====================================================================
+
+DIAGRAM 1 -- TOPOLOGY
+---------------------
+
+                              INTERNET
+                                 |
+                                 |
+                +--------------------------------+
+                |  WAN -- untagged, flat network  |
+                |  192.168.0.0/24                 |
+                +----------------+-----------------+
+                                 |
+                +----------------v-----------------+
+                |     OPNsense Router  (VM 200)     |
+                |  4 vCPU / 4GB RAM / 20GB disk     |
+                |  1 WAN NIC + 8 tagged VLAN NICs   |
+                |  Default policy: DENY ALL         |
+                |  (only explicit allow rules pass) |
+                +----------------+-----------------+
+                                 |
+        +------------------------------------------------+
+        |   trunk carries all 8 VLANs below, tagged;      |
+        |   native VLAN 999 left empty on purpose         |
+        |   (anti VLAN-hopping / double-tagging defense)  |
+        +------------------------------------------------+
+                                 |
+    ----------------------------+----------------------------------
+
+  +----------------------------------------------------------------+
+  | VLAN 10  --  Management            10.0.10.0/24   gw 10.0.10.1 |
+  |------------------------------------------------------------------
+  |  Proxmox host UI, future cluster/corosync traffic                |
+  |  Reachable from: Proxmox host ONLY. Every other VLAN is DENIED.  |
+  +--------------------------------------------------------------------+
+
+  +--------------------------------------------------------------------+
+  | VLAN 20  --  Database tier         10.0.20.0/24   gw 10.0.20.1     |
+  |----------------------------------------------------------------------
+  |  linux-sql-server    [DOWN]   MSSQL                                 |
+  |  linux-mysql         [DOWN]   MySQL                                 |
+  |  linux-mariadb       [DOWN]   MariaDB                                |
+  |  linux-postgres      [DOWN]   PostgreSQL                             |
+  |  linux-oracle-db     [DOWN]   Oracle                                  |
+  |  linux-mongodb (CT)  [DOWN]   MongoDB                                  |
+  |  linux-mysql-2 (CT)  [DOWN]   MySQL (split instance)                    |
+  |  linux-mariadb-2(CT) [DOWN]   MariaDB (split instance)                   |
+  +----------------------------------------------------------------------+
+
+  +----------------------------------------------------------------------+
+  | VLAN 30  --  App / Secrets / Storage 10.0.30.0/24  gw 10.0.30.1      |
+  |--------------------------------------------------------------------------
+  |  spring-boot-app     [DOWN]   Spring Boot app server                    |
+  |  linux-mini-io       [DOWN]   MinIO object storage                       |
+  |  linux-vault (CT)    [DOWN]   HashiCorp Vault                             |
+  |  linux-gh-runner(CT) [DOWN]   GitHub Actions runner                        |
+  |                                (exception: this host may SSH into any      |
+  |                                 VLAN 20/30/40 host -- CD path only)        |
+  +----------------------------------------------------------------------------+
+
+  +----------------------------------------------------------------------------+
+  | VLAN 40  --  Personal / Misc          10.0.40.0/24   gw 10.0.40.1          |
+  |------------------------------------------------------------------------------
+  |  app-server           [DOWN]   Animal Shelter Workshop (side project)         |
+  |  Blocked from reaching VLAN 20 (DB) and VLAN 30 (App/Secrets) entirely.        |
+  +------------------------------------------------------------------------------+
+
+  +------------------------------------------------------------------------------+
+  | VLAN 50  --  (reserved) Ceph           10.0.50.0/24   gw 10.0.50.1              |
+  |  Not used yet -- for Ceph storage replication once a 2nd node is added.           |
+  +------------------------------------------------------------------------------------+
+
+  +------------------------------------------------------------------------------------+
+  | VLAN 60  --  (reserved) DMZ            10.0.60.0/24   gw 10.0.60.1                    |
+  |  Not used yet -- for any future public-facing service besides Spring Boot.               |
+  +--------------------------------------------------------------------------------------------+
+
+  +--------------------------------------------------------------------------------------------+
+  | VLAN 70  --  (reserved) Media / Personal services  10.0.70.0/24   gw 10.0.70.1                |
+  |  Not used yet -- e.g. Jellyfin or similar self-hosted apps.                                       |
+  +------------------------------------------------------------------------------------------------------+
+
+  +------------------------------------------------------------------------------------------------------+
+  | VLAN 80  --  (reserved) Observability   10.0.80.0/24   gw 10.0.80.1                                     |
+  |  Not used yet -- for Prometheus/Grafana/Loki. Kept off VLAN 30 on purpose,                                 |
+  |  so a compromise of what's being monitored can't also kill the logs proving it.|
+  +--------------------------------------------------------------------------------------------------------------+
+
+  VLAN 999 -- Native / dead-end trunk VLAN. No subnet. No devices, ever.
+              (deliberately empty -- nothing for a double-tagging attack to land on)
+
+  OPNsense itself: [UP]  -- the only guest left running right now.
+  All 13 fleet VMs/CTs above are currently [DOWN] (intentional, see status note below).
+
+
+DIAGRAM 2 -- FIREWALL RULE FLOW  (default policy: DENY ALL; explicit allows only)
+----------------------------------------------------------------------------------
+
+  spring-boot-app (30) ------------> linux-oracle-db (20), port 1521    ALLOW  (one specific path)
+  spring-boot-app (30) ------------> linux-mini-io   (30), S3 port      ALLOW  (same VLAN)
+  linux-gh-runner (30) ------------> any host in VLAN 20 / 30 / 40, :22 ALLOW  (CD runner only, scoped to this host)
+  any VLAN             ------------> Management (10)                   DENY   (except the Proxmox host itself)
+  Personal (40)         --X-------->  Database (20)                    DENY
+  Personal (40)         --X-------->  App/Secrets (30)                 DENY
+  host <---------------> other host, same VLAN                         ALLOW  (same trust tier)
+  any VLAN             ------------> Internet                          ALLOW
+  anything not listed above                                            DENY   (silent drop)
+
+  Legend:  ------>  explicit ALLOW        --X-->  explicit DENY
+
+
+STATUS NOTE
+-----------
+As of this diagram's generation, every guest except OPNsense (VM 200) has been
+intentionally powered off (fleet-wide shutdown, not a fault). The VLAN/subnet
+design and firewall rules above describe the standing network configuration,
+not today's temporary power state. Power everything back on and each host
+will resume on its reserved IP within its VLAN as shown.
+```
