@@ -540,3 +540,62 @@ Issues found and fixed while rolling this out across the live hosts above:
 (This screenshot predates fixes 3, 5, and 6 above — kept as a record of the
 first successful live rollout, not the current look; see Result above for
 that.)
+
+---
+
+## Addendum (2026-07-24) — Proxmox Host Node Banner (fastfetch)
+
+**Scope:** The Proxmox node itself, `taufiq` (Proxmox VE 9.1.1) — not the
+guest fleet above.
+**Mechanism:** `fastfetch` (apt package), triggered from `/root/.bashrc` on
+interactive shells only.
+
+### Why a separate mechanism instead of reusing the MOTD script above
+
+The dynamic MOTD above is built around per-role service health checks, which
+doesn't apply to the host node — SSHing into `taufiq` is for hypervisor
+administration, not a "role" like MySQL or Vault. A hardware/OS summary is
+more useful here, and `fastfetch` already does this well with zero custom
+scripting: it auto-detects Proxmox VE from `/etc/os-release` and ships its
+own built-in Proxmox logo and coloring.
+
+### Setup
+
+```bash
+apt update
+apt install -y fastfetch
+```
+
+Confirm it auto-detects Proxmox VE (logo, OS, host, kernel, CPU, GPU(s),
+memory, disk, etc.):
+
+```bash
+fastfetch
+```
+
+Then wire it to fire on interactive logins only. This matters specifically on
+this host: unlike the PAM-driven `/etc/update-motd.d/` mechanism used for the
+guest fleet above, a command placed in `.bashrc` is not automatically
+login/session-scoped — on `taufiq`, `.bashrc` is sourced even for
+non-interactive `ssh taufiq "some command"` invocations (e.g. the Option A
+rollout loop in Step 5, or any other scripted SSH command against this host).
+Checking `$SSH_CONNECTION` alone is **not** enough to guard against this — it
+is set for scripted SSH commands too, not just real logins. What actually
+gates correctly is checking for an interactive shell (`$-` containing `i`).
+Append to `/root/.bashrc`:
+
+```bash
+# Show system info on interactive login only (avoid polluting scripted/non-interactive SSH commands)
+case $- in
+    *i*) command -v fastfetch >/dev/null 2>&1 && fastfetch ;;
+esac
+```
+
+### Result
+
+SSHing into `taufiq` interactively now shows fastfetch's built-in Proxmox VE
+logo plus OS, host, kernel, uptime, packages, shell, CPU, GPU(s), memory,
+swap, disk, local IP, and locale. Scripted/non-interactive SSH commands
+against this host (including the Step 5 rollout loop) stay clean — verified
+both cases directly: an interactive `bash -ic` session shows the banner, a
+plain scripted command does not.
