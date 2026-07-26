@@ -34,6 +34,8 @@ tutorial would be.
 
 ### Proxmox Host
 
+![The physical host — a Lenovo ThinkCentre M700 Tiny, tucked under a side table](images/proxmox-host-thinkcentre.jpeg)
+
 | Component | Value |
 |---|---|
 | Hostname | taufiq |
