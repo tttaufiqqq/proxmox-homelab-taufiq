@@ -35,7 +35,9 @@ just the network" reasoning as the Azure backup SAS token: a dedicated
 `linux-mini-io` turned out to be **stopped** when I went to use it — it's
 not part of the always-on core fleet. Had to `qm start 109` first, which is
 now called out explicitly in `docs/07-terraform.md` so it's not a surprise
-next time.
+next time. Since Terraform now depends on it for every `plan`/`apply`, set
+`onboot: 1` (`qm set 109 --onboot 1`) so it survives a Proxmox host reboot
+without a manual restart.
 
 Migration itself was uneventful — the local state was already empty (the
 Stage 1 test VMs had been torn down), so there was nothing at risk. Verified
@@ -120,6 +122,11 @@ namespace and failed to find it.
   the identical 8-resource create plan as the pre-refactor config, just
   under module-scoped addresses; the two containers remain undisturbed
   throughout.
+- CI/CD: pushing these changes (`bd6151e`, `c67d585`, `b5c0f35`) did not
+  break the pipeline — `Tests #34` (`b5c0f35`) completed green and fed a
+  successful `Deploy #12`, confirmed via the GitHub Actions tab. Expected,
+  since none of the three commits touch `infrastructure/ansible/**`, which
+  is the only thing `deploy.yml`'s playbook-running jobs currently act on.
 
 ## Where things live
 
