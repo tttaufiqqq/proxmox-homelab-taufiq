@@ -86,7 +86,11 @@ identity segment. Segments:
   hostname text is still there as a fallback even though color is the
   primary signal, same "don't rely on text alone, but don't remove it
   either" approach I took with figlet in MOTD. Fixed color, not per-host,
-  same purple everywhere.
+  same purple everywhere, **except `taufiq`**, which uses orange
+  (`#e65100`) instead, a deliberate one-host exception so the Proxmox host
+  node itself reads as visually distinct in both segments, not just the
+  path/accent one, since it's the one host that's "management plane"
+  rather than a workload.
 - Path (the identity segment, rounded pill, background is `__ACCENT__`,
   this host's color from the table above): current working directory. This
   is the only segment that changes per host.
@@ -261,7 +265,10 @@ In scope. It keeps `fastfetch` exactly as-is (that's my login-splash
 equivalent of MOTD there, unaffected by this plan) and additionally gets
 its own oh-my-posh prompt using the same shared template and its own
 accent color (`#607d8b`, from the table above), the same "MOTD for the
-banner, oh-my-posh for the prompt" split I'm giving the guest fleet.
+banner, oh-my-posh for the prompt" split I'm giving the guest fleet. Its
+session segment is also overridden to orange (`#e65100`) instead of the
+fleet-wide purple, the one place this host's prompt diverges from every
+guest's beyond just the path/accent color.
 
 One quirk carries over from the fastfetch addendum in
 `docs/17-custom-ssh-motd`: on this host specifically, `.bashrc` gets
@@ -414,7 +421,7 @@ Not started yet, tracked here as it happens, same table shape as
 | `linux-sql-server` | Done, colors verified. Powered on, customized, powered back off (original state restored). |
 | `spring-boot-app` | Done, colors verified. Powered on, customized, powered back off (needed a longer shutdown timeout, see Notes). |
 | `linux-oracle-db` | Done, colors verified. Powered on, customized (binary copied from `linux-vault` over Tailscale, see Notes), powered back off. |
-| `taufiq` | Done, colors verified. Confirmed scripted SSH stays clean and `PROMPT_COMMAND` is only set (`_omp_hook`) in a real interactive shell. |
+| `taufiq` | Done, colors verified. Confirmed scripted SSH stays clean and `PROMPT_COMMAND` is only set (`_omp_hook`) in a real interactive shell. Session segment later changed to orange (`#e65100`) instead of the fleet-wide purple, per request. |
 
 ## Notes (rollout findings so far)
 
