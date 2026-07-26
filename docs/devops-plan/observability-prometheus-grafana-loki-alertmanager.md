@@ -281,20 +281,26 @@ Stopped `prometheus-node-exporter` on `linux-k3s` for real
 
 ## Screenshots
 
-- `images/stage6-grafana-fleet-overview-dashboard.png` — the
-  `asw-fleet-overview` dashboard itself, live, CPU/RAM/disk per host (see
-  the Prometheus vs. Grafana section above).
-- `images/stage6-telegram-bot-test-message.png` — the bot's own test
-  message, proving the token + chat ID pairing works before wiring it into
-  Alertmanager.
-- `images/stage6-telegram-alert-firing.png` — the real `InstanceDown` alert
-  as it arrived in Telegram during the fire-drill, timestamped 23:25,
-  matching the drill's own timeline.
-- `../18-network-segmentation/images/20-vlan80-rule1-internet-only.png`,
-  `21-vlan80-rules-list-rule1-applied.png`,
-  `22-vlan80-rule2-dns-to-opnsense.png` — the VLAN 80 firewall rules being
-  added in OPNsense (see the network segmentation doc's own VLAN 80
-  section for the full narrative).
+The `asw-fleet-overview` dashboard itself is embedded above, in the
+Prometheus vs. Grafana section.
+
+**Telegram bot verification** — the test message, confirming the bot token
++ chat ID pairing worked before wiring it into Alertmanager:
+
+![Telegram test message from the verification step — "Stage 6 (Observability) - test message from Claude Code. Bot token and chat ID both valid."](images/stage6-telegram-bot-test-message.png)
+
+**The real fire-drill alert**, as it arrived in Telegram — `InstanceDown`
+firing for `linux-k3s`, timestamped 23:25, matching the drill's own
+timeline exactly:
+
+![Telegram showing the InstanceDown alert firing for linux-k3s, "node_exporter down for 2m+", timestamped 23:25](images/stage6-telegram-alert-firing.jpg)
+
+**VLAN 80's firewall rules being added in OPNsense** (see the network
+segmentation doc's own VLAN 80 section for the full narrative):
+
+![Rule 1 (internet-only) edit form, saved correctly](../18-network-segmentation/images/20-vlan80-rule1-internet-only.png)
+![Firewall rules list showing rule 1 applied, plus a pre-existing floating DNS rule](../18-network-segmentation/images/21-vlan80-rules-list-rule1-applied.png)
+![Rule 2 (DNS to OPNsense) edit form for VLAN 80](../18-network-segmentation/images/22-vlan80-rule2-dns-to-opnsense.png)
 
 **Not yet captured:** a screenshot of the Loki Explore view — straightforward
 to grab next time the Grafana UI (`http://100.77.185.81:3000`,
