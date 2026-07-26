@@ -1,0 +1,187 @@
+<!-- Not yet sequenced into a numbered docs/ folder — lives here in
+     docs/devops-plan/ until the full devops-practice-plan.md is complete.
+     Date below is provisional (the date this actually happened); revisit
+     once final sequencing/dating is decided. -->
+
+# Azure Cloud: Offsite Backup Sync + Budget Guardrail
+
+**Date:** 2026-07-26
+**Repo the actual code/infra changes live in:** `Animal-Shelter-Workshop`
+(this write-up lives in the homelab meta-repo instead, alongside the devops
+practice plan it's a stage of — see `devops-practice-plan.md`, Stage 8)
+
+## Why this exists
+
+`Animal-Shelter-Workshop/docs/10-backups.md` already flagged the gap:
+nightly backups were centralized on `app-server`, but never left the
+Proxmox host. Losing that one VM would have taken the backups down with
+it — the exact "off-VM backup copies" item that doc's own restore-drill
+section listed as still open.
+
+Separately, an Azure for Students subscription existed with $87.61 of $100
+credit unused, expiring March 2027. Rather than let it lapse, it became the
+offsite target — genuine hybrid-cloud exposure instead of a second on-prem
+copy sitting on the same LAN.
+
+## What was built
+
+**Budget guardrail first, before touching anything billable.** $87.61 over
+~8 months of runway works out to ~$10.95/month — a monthly Azure Cost
+Management budget (`homelab-stage8-guardrail`, $10, expiring 4/30/2027 to
+match the credit) with alerts at 50/80/100% of spend, emailing an address
+actually checked. This was the first thing created, not an afterthought —
+nothing else below draws more than pennies against it, but a stretch-goal VM
+later in the same plan (Terraform → Azure) very much could if left running.
+
+**Storage:** one Storage Account (`aswbackupstaufiq`, Standard/LRS, its own
+`homelab-stage8` resource group) with a private `backups` Blob container.
+Access is a **container-scoped SAS token** — Read/Write/List/Create only, no
+Delete, so a leaked token still can't destroy offsite copies — rather than
+the full account key. Public network access stays enabled (from all
+networks): `app-server` reaches Azure over the public internet, not from
+inside an Azure VNet, and pinning to a home IP would break the sync the next
+time a residential ISP rotates it. The actual access control is the scoped
+credential, not the network boundary.
+
+**Credential delivery reused the existing pipeline instead of adding a new
+one.** `secret/animal-shelter-workshop` in Vault already held 14 fields (DB
+password, `APP_KEY`, Cloudinary, mail, ToyyibPay), and the `asw-deploy`
+AppRole already had read access to exactly that path. Two more fields —
+`azure_backup_sas_token`, `azure_backup_container_url` — were added to the
+same secret rather than standing up a new AppRole/policy. `env-app.j2` and
+`vault-agent.hcl.j2` (both in `Animal-Shelter-Workshop`) got two more
+entries each, alongside Cloudinary/mail — no new Vault plumbing, just two
+more lines in an existing pattern.
+
+**The sync itself lives inside the existing backup command, not beside it.**
+`App\Services\Backup\AzureBackupSync` (`Animal-Shelter-Workshop`) uploads
+over the Blob REST API directly (a SAS token already grants everything a
+plain HTTP `PUT` needs — no SDK dependency). It's called from
+`BackupDatabases::handle()` right after the manifest is written, wrapped so
+a sync failure is logged and never fails the backup command itself or
+blocks retention pruning — the local backup is already valid regardless of
+the offsite copy's outcome. No new schedule entry was needed: this rides
+inside the already-scheduled `db:backup`
+(`Animal-Shelter-Workshop/routes/console.php`, `dailyAt('02:00')`).
+
+## Architecture
+
+```
+                                    Vault (secret/animal-shelter-workshop)
+                                    azure_backup_sas_token
+                                    azure_backup_container_url
+                                              │
+                                    Vault Agent (scheduler config)
+                                              │ injects into env
+                                              ▼
+  02:00 nightly ──▶ Laravel scheduler ──▶ php artisan db:backup
+                                              │
+                            ┌─────────────────┼─────────────────┐
+                            ▼                 ▼                 ▼
+                    dump 5 databases   write manifest.json   AzureBackupSync
+                    (existing, see     (existing)            .sync() — NEW
+                    ASW's docs/10-
+                    backups.md)
+                                                                   │
+                                                                   ▼
+                                              Azure Blob container "backups"
+                                              (aswbackupstaufiq), one folder
+                                              per run-id, independent of the
+                                              Proxmox host entirely
+```
+
+## What broke, how it was found, how it was recovered
+
+Two real, pre-existing bugs surfaced while getting this working — neither
+caused by the new code, both worth recording because they'd have kept
+biting silently otherwise.
+
+### 1. The CD pipeline's own smoke test could fail a healthy deploy
+
+**What broke:** the first deploy of this feature (`Deploy #3`, commit
+`6de75b8`) failed its "Smoke test — app health" step and auto-rolled back to
+the previous commit, even though nothing about the new code touched that
+check.
+
+**How it was found:** the failing step's own printed output — recovered
+from the run's log, not guessed at — showed `Database status: 5/5 online`
+immediately followed by:
+```
+line 6: echo: write error: Broken pipe
+```
+The script was `echo "$OUTPUT" | grep -q '5/5 online'`. `grep -q` exits the
+instant it finds a match, before `echo` finishes writing the rest of the
+(long) migration listing. Under `set -euo pipefail`, `echo`'s resulting
+`SIGPIPE` fails the whole step — even though the health check had already
+found exactly what it was looking for. Reproducing the identical command by
+hand on `app-server` immediately afterward confirmed the health check itself
+was fine; the pipe was the only thing broken.
+
+**How it was recovered:** replaced both occurrences (the deploy smoke test
+and the rollback smoke test, in `Animal-Shelter-Workshop/.github/workflows/deploy.yml`)
+with a pure bash substring match — `[[ "$OUTPUT" == *"5/5 online"* ]]` — no
+subprocess, no pipe, no race. Verified by pushing again: `Deploy #4`, commit
+`b55b624`, succeeded cleanly, no rollback.
+
+### 2. A documented grant fix had silently reverted
+
+**What broke:** a manual test of the actual backup command aborted
+immediately:
+```
+mysqldump: workshop_2_prod has insufficient privileges to SHOW CREATE PROCEDURE `sp_image_create`!
+```
+
+**How it was found:** `Animal-Shelter-Workshop/docs/10-backups.md` already
+documented this exact class of problem, fixed once during the 2026-07-20
+restore drill — the routine-viewing grant MySQL 8 needs (`SHOW_ROUTINE`) and
+MariaDB needs (`SELECT ON mysql.proc`) so `mysqldump --routines` can read a
+routine's body when the connecting user isn't its `DEFINER` (every routine
+is still `DEFINER=workshop_2`, the pre-split shared credential). Checking
+`SHOW GRANTS` directly on all 4 MySQL/MariaDB hosts confirmed the grant was
+**missing everywhere**, despite the doc recording it as fixed five days
+earlier. The `SECURITY_TYPE` fix from the separate `DEFINER`-outage incident
+was still correctly in place (`INVOKER` on every routine) — this was a
+different, narrower gap: the grant that lets `mysqldump` *view* a routine at
+all, not the one that controls *executing* it.
+
+Root cause, once traced: `community.mysql.mysql_user`'s default
+`append_privs: false` revokes any grant not listed in its `priv` string on
+every run. The 2026-07-20 fix was applied by hand, outside Ansible's managed
+state entirely — so the next ordinary re-provisioning run silently reverted
+every one of the 4 accounts back to just `ALL PRIVILEGES ON
+workshop_2_prod.*`, with no error, no log, nothing to notice until a backup
+tried to run.
+
+**How it was recovered:** re-applied the grant on all 4 hosts immediately to
+unblock testing, then fixed it properly — folded the extra grant into the
+*same* managed `priv` string in all 4 playbooks
+(`Animal-Shelter-Workshop/infrastructure/ansible/playbooks/linux-mysql{,-2}.yml`/
+`linux-mariadb{,-2}.yml`) rather than a separate task, since a separate
+`mysql_user` task with a narrower `priv` would just flip-flop against this
+one on alternating runs. Verified live: ran `site.yml` against all 4 real
+hosts twice. Both runs reported `changed=0` — confirms the grant now
+survives re-provisioning instead of silently reverting again.
+
+## Verification
+
+A real, manual `php artisan db:backup` run (`20260726_041712`) completed
+successfully post-fix: all 5 dumps, a clean logical foreign-key audit,
+`Synced to Azure Blob Storage.` printed. Confirmed independently two ways —
+a direct Blob List Containers API call, and the Azure portal — that all 6
+files (`manifest.json` + 5 dumps) actually exist in
+`backups/20260726_041712/`.
+
+## Where things live
+
+| Piece | Path (all in `Animal-Shelter-Workshop` unless noted) |
+|---|---|
+| Azure config | `config/azure_backup.php` |
+| Upload logic | `app/Services/Backup/AzureBackupSync.php` |
+| Wired into the backup command | `app/Console/Commands/BackupDatabases.php` |
+| Vault Agent injection (scheduler, php-fpm, etc.) | `infrastructure/ansible/templates/vault-agent.hcl.j2` |
+| Plaintext-fallback env rendering | `infrastructure/ansible/templates/env-app.j2` |
+| CD pipeline smoke-test fix | `.github/workflows/deploy.yml` |
+| Routine-grant fix (all 4 DB playbooks) | `infrastructure/ansible/playbooks/linux-{mysql,mysql-2,mariadb,mariadb-2}.yml` |
+| Vault secret (2 new fields on the existing path) | `secret/animal-shelter-workshop` (`azure_backup_sas_token`, `azure_backup_container_url`) |
+| Azure resources | Resource group `homelab-stage8`; Storage Account `aswbackupstaufiq`; container `backups`; budget `homelab-stage8-guardrail` |
+| This write-up | `proxmox-homelab-taufiq/docs/devops-plan/azure-cloud-backup-sync.md` (homelab meta-repo) |
