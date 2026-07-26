@@ -3,7 +3,7 @@
 ## Goal
 I want every VM/CT to have its own distinct prompt color, so I know which
 host I'm on just by looking at the prompt, for the whole session, not just
-at the login banner like [`docs/17-custom-ssh-motd`](../docs/17-custom-ssh-motd/custom-ssh-motd-setup.md)
+at the login banner like [`docs/17-custom-ssh-motd`](../docs/17-custom-ssh-motd/01-custom-ssh-motd-setup.md)
 already gives me. The two aren't overlapping, they're complementary: MOTD
 paints the banner once at login, this paints the prompt itself, which stays
 on screen for every command I type afterward.
