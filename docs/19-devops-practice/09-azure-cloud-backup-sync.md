@@ -1,5 +1,5 @@
-<!-- Not yet sequenced into a numbered docs/ folder — lives here in
-     docs/devops-plan/ until the full devops-practice-plan.md is complete.
+<!-- Not yet sequenced into a numbered docs/ folder, lives here in
+     docs/19-devops-practice/ until the full devops-practice-plan.md is complete.
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
@@ -8,22 +8,22 @@
 **Date:** 2026-07-26
 **Repo the actual code/infra changes live in:** `Animal-Shelter-Workshop`
 (this write-up lives in the homelab meta-repo instead, alongside the devops
-practice plan it's a stage of — see `devops-practice-plan.md`, Stage 8)
+practice plan it's a stage of, see `devops-practice-plan.md`, Stage 8)
 
 ## Why I built this
 
 `Animal-Shelter-Workshop/docs/10-backups.md` already flagged the gap:
 nightly backups were centralized on `app-server`, but never left the
 Proxmox host. Losing that one VM would have taken the backups down with
-it — the exact "off-VM backup copies" item that doc's own restore-drill
+it, the exact "off-VM backup copies" item that doc's own restore-drill
 section listed as still open.
 
 Separately, I had an Azure for Students subscription sitting there with
 $87.61 of $100 credit unused, expiring March 2027. Rather than let it
-lapse, I made it the offsite target — genuine hybrid-cloud exposure instead
+lapse, I made it the offsite target, genuine hybrid-cloud exposure instead
 of a second on-prem copy sitting on the same LAN.
 
-![Azure for Students Benefits page — $87.61 of $100 credit remaining, "Always free services" tile listing Advisor, API Management, App Configuration, Azure App Service, Automation, Azure AI Bot Service, AI Immersive Reader, Azure AI Language](images/02-azure-student-benefits.png)
+![Azure for Students Benefits page, $87.61 of $100 credit remaining, "Always free services" tile listing Advisor, API Management, App Configuration, Azure App Service, Automation, Azure AI Bot Service, AI Immersive Reader, Azure AI Language](images/02-azure-student-benefits.png)
 
 ## What I built
 
@@ -31,46 +31,46 @@ of a second on-prem copy sitting on the same LAN.
 ~8 months of runway works out to ~$10.95/month, so I set up a monthly Azure
 Cost Management budget (`homelab-stage8-guardrail`, $10, expiring 4/30/2027
 to match the credit) with alerts at 50/80/100% of spend, emailing an
-address I actually check. I did this first, not as an afterthought —
+address I actually check. I did this first, not as an afterthought,
 nothing else below draws more than pennies against it, but a stretch-goal
 VM later in the same plan (Terraform → Azure) very much could if I left it
 running.
 
-![Azure Create Budget wizard, filled in — Name homelab-stage8-guardrail, Reset period Monthly, Creation date July 2026, Expiration date April 2027, Amount 10](images/04-azure-create-budget-filled.png)
-![Set alerts step — Actual cost thresholds at 50% ($5), 80% ($8), 100% ($10), alert recipient taufiq33992@gmail.com](images/05-azure-set-alerts.png)
-![Budgets list confirming it's live — homelab-stage8-guardrail, Monthly, 7/1/2026-4/30/2027, Budget $10.00, Evaluated spend $0.00, Progress 0.00%](images/06-azure-budget-list-confirmed.png)
+![Azure Create Budget wizard, filled in, Name homelab-stage8-guardrail, Reset period Monthly, Creation date July 2026, Expiration date April 2027, Amount 10](images/04-azure-create-budget-filled.png)
+![Set alerts step, Actual cost thresholds at 50% ($5), 80% ($8), 100% ($10), alert recipient taufiq33992@gmail.com](images/05-azure-set-alerts.png)
+![Budgets list confirming it's live, homelab-stage8-guardrail, Monthly, 7/1/2026-4/30/2027, Budget $10.00, Evaluated spend $0.00, Progress 0.00%](images/06-azure-budget-list-confirmed.png)
 
 **Storage:** one Storage Account (`aswbackupstaufiq`, Standard/LRS, its own
 `homelab-stage8` resource group) with a private `backups` Blob container. I
-scoped access to a **container-scoped SAS token** — Read/Write/List/Create
-only, no Delete, so a leaked token still can't destroy offsite copies —
+scoped access to a **container-scoped SAS token**, Read/Write/List/Create
+only, no Delete, so a leaked token still can't destroy offsite copies,
 rather than the full account key. I left public network access enabled
 (from all networks): `app-server` reaches Azure over the public internet,
 not from inside an Azure VNet, and pinning to a home IP would break the
 sync the next time my ISP rotates it. The actual access control I'm relying
 on is the scoped credential, not the network boundary.
 
-![Storage account Basics tab — Subscription Azure for Students, Resource group (New) homelab-stage8, name aswbackupstaufiq, Region Southeast Asia, Preferred storage type Azure Blob Storage, Performance Standard, Redundancy LRS](images/10-storage-basics-tab.png)
-![Storage account Networking tab — Public network access: Enable, scope: Enable from all networks](images/07-storage-networking-tab.png)
-![Containers blade showing 2 items — auto-created $logs (private, Azure's own storage-analytics container) and the new backups container (private, Available)](images/11-storage-containers-created.png)
+![Storage account Basics tab, Subscription Azure for Students, Resource group (New) homelab-stage8, name aswbackupstaufiq, Region Southeast Asia, Preferred storage type Azure Blob Storage, Performance Standard, Redundancy LRS](images/10-storage-basics-tab.png)
+![Storage account Networking tab, Public network access: Enable, scope: Enable from all networks](images/07-storage-networking-tab.png)
+![Containers blade showing 2 items, auto-created $logs (private, Azure's own storage-analytics container) and the new backups container (private, Available)](images/11-storage-containers-created.png)
 
 **I reused the existing credential-delivery pipeline instead of adding a new
 one.** `secret/animal-shelter-workshop` in Vault already held 14 fields (DB
 password, `APP_KEY`, Cloudinary, mail, ToyyibPay), and the `asw-deploy`
 AppRole already had read access to exactly that path. I added two more
-fields — `azure_backup_sas_token`, `azure_backup_container_url` — to the
+fields, `azure_backup_sas_token`, `azure_backup_container_url`, to the
 same secret rather than standing up a new AppRole/policy, and added two more
 entries to `env-app.j2` and `vault-agent.hcl.j2` (both in
-`Animal-Shelter-Workshop`), alongside Cloudinary/mail — no new Vault
+`Animal-Shelter-Workshop`), alongside Cloudinary/mail, no new Vault
 plumbing, just two more lines in a pattern that already existed.
 
 **I put the sync inside the existing backup command, not beside it.** I
 wrote `App\Services\Backup\AzureBackupSync` (`Animal-Shelter-Workshop`) to
 upload over the Blob REST API directly (a SAS token already grants
-everything a plain HTTP `PUT` needs — no SDK dependency). I call it from
+everything a plain HTTP `PUT` needs, no SDK dependency). I call it from
 `BackupDatabases::handle()` right after the manifest is written, wrapped so
 a sync failure is logged and never fails the backup command itself or
-blocks retention pruning — the local backup is already valid regardless of
+blocks retention pruning, the local backup is already valid regardless of
 whether the offsite copy succeeds. I didn't need a new schedule entry: this
 rides inside the already-scheduled `db:backup`
 (`Animal-Shelter-Workshop/routes/console.php`, `dailyAt('02:00')`).
@@ -90,7 +90,7 @@ rides inside the already-scheduled `db:backup`
                             ┌─────────────────┼─────────────────┐
                             ▼                 ▼                 ▼
                     dump 5 databases   write manifest.json   AzureBackupSync
-                    (existing, see     (existing)            .sync() — NEW
+                    (existing, see     (existing)            .sync(), NEW
                     ASW's docs/10-
                     backups.md)
                                                                    │
@@ -103,19 +103,19 @@ rides inside the already-scheduled `db:backup`
 
 ## What broke, how I found it, how I recovered
 
-Two real, pre-existing bugs surfaced while I was getting this working —
+Two real, pre-existing bugs surfaced while I was getting this working,
 neither caused by my new code, both worth recording because they'd have
 kept biting silently otherwise.
 
 ### 1. The CD pipeline's own smoke test could fail a healthy deploy
 
 **What broke:** the first deploy of this feature (`Deploy #3`, commit
-`6de75b8`) failed its "Smoke test — app health" step and auto-rolled back to
+`6de75b8`) failed its "Smoke test, app health" step and auto-rolled back to
 the previous commit, even though nothing about my new code touched that
 check.
 
 **How I found it:** I pulled the failing step's own printed output straight
-from the run's log instead of guessing — it showed `Database status: 5/5
+from the run's log instead of guessing, it showed `Database status: 5/5
 online` immediately followed by:
 ```
 line 6: echo: write error: Broken pipe
@@ -123,21 +123,21 @@ line 6: echo: write error: Broken pipe
 The script was `echo "$OUTPUT" | grep -q '5/5 online'`. `grep -q` exits the
 instant it finds a match, before `echo` finishes writing the rest of the
 (long) migration listing. Under `set -euo pipefail`, `echo`'s resulting
-`SIGPIPE` fails the whole step — even though the health check had already
+`SIGPIPE` fails the whole step, even though the health check had already
 found exactly what it was looking for. I reproduced the identical command
 by hand on `app-server` right afterward and confirmed the health check
 itself was fine; the pipe was the only thing broken.
 
-![Deploy #3 failed and auto-rolled-back to 3b67355 — job summary showing the migration caveat this pipeline already documents for rollback](images/12-deploy3-failed-rollback.png)
+![Deploy #3 failed and auto-rolled-back to 3b67355, job summary showing the migration caveat this pipeline already documents for rollback](images/12-deploy3-failed-rollback.png)
 
 **How I recovered:** I replaced both occurrences (the deploy smoke test and
 the rollback smoke test, in
 `Animal-Shelter-Workshop/.github/workflows/deploy.yml`) with a pure bash
-substring match — `[[ "$OUTPUT" == *"5/5 online"* ]]` — no subprocess, no
+substring match, `[[ "$OUTPUT" == *"5/5 online"* ]]`, no subprocess, no
 pipe, no race. I verified it by pushing again: `Deploy #4`, commit
 `b55b624`, succeeded cleanly, no rollback.
 
-![Deploy #4 succeeded — plan/deploy-app green, rollback and no-rollback-target skipped, total duration 2m 33s](images/13-deploy4-succeeded.png)
+![Deploy #4 succeeded, plan/deploy-app green, rollback and no-rollback-target skipped, total duration 2m 33s](images/13-deploy4-succeeded.png)
 
 ### 2. A grant fix I'd already made had silently reverted
 
@@ -149,7 +149,7 @@ mysqldump: workshop_2_prod has insufficient privileges to SHOW CREATE PROCEDURE 
 
 **How I found it:** `Animal-Shelter-Workshop/docs/10-backups.md` already
 documented this exact class of problem, fixed once during the 2026-07-20
-restore drill — the routine-viewing grant MySQL 8 needs (`SHOW_ROUTINE`) and
+restore drill, the routine-viewing grant MySQL 8 needs (`SHOW_ROUTINE`) and
 MariaDB needs (`SELECT ON mysql.proc`) so `mysqldump --routines` can read a
 routine's body when the connecting user isn't its `DEFINER` (every routine
 is still `DEFINER=workshop_2`, the pre-split shared credential). I checked
@@ -157,26 +157,26 @@ is still `DEFINER=workshop_2`, the pre-split shared credential). I checked
 was **missing everywhere**, despite my own doc recording it as fixed five
 days earlier. I also checked the `SECURITY_TYPE` fix from the separate
 `DEFINER`-outage incident, and that was still correctly in place (`INVOKER`
-on every routine) — this was a different, narrower gap: the grant that lets
+on every routine), this was a different, narrower gap: the grant that lets
 `mysqldump` *view* a routine at all, not the one that controls *executing*
 it.
 
 Once I traced the root cause: `community.mysql.mysql_user`'s default
 `append_privs: false` revokes any grant not listed in its `priv` string on
 every run. I'd applied the 2026-07-20 fix by hand, outside Ansible's managed
-state entirely — so the next ordinary re-provisioning run silently reverted
+state entirely, so the next ordinary re-provisioning run silently reverted
 every one of the 4 accounts back to just `ALL PRIVILEGES ON
 workshop_2_prod.*`, with no error, no log, nothing to notice until a backup
 tried to run.
 
 **How I recovered:** I re-applied the grant on all 4 hosts immediately to
-unblock testing, then fixed it properly — I folded the extra grant into the
+unblock testing, then fixed it properly, I folded the extra grant into the
 *same* managed `priv` string in all 4 playbooks
 (`Animal-Shelter-Workshop/infrastructure/ansible/playbooks/linux-mysql{,-2}.yml`/
 `linux-mariadb{,-2}.yml`) rather than a separate task, since a separate
 `mysql_user` task with a narrower `priv` would just flip-flop against this
 one on alternating runs. I verified it live: ran `site.yml` against all 4
-real hosts twice. Both runs reported `changed=0` — confirms the grant now
+real hosts twice. Both runs reported `changed=0`, confirms the grant now
 survives re-provisioning instead of silently reverting again.
 
 ## Verification
@@ -184,11 +184,11 @@ survives re-provisioning instead of silently reverting again.
 I ran a real, manual `php artisan db:backup` (`20260726_041712`) that
 completed successfully post-fix: all 5 dumps, a clean logical foreign-key
 audit, `Synced to Azure Blob Storage.` printed. I confirmed it independently
-two ways — a direct Blob List Containers API call, and the Azure portal —
+two ways, a direct Blob List Containers API call, and the Azure portal,
 that all 6 files (`manifest.json` + 5 dumps) actually exist in
 `backups/20260726_041712/`.
 
-![backups/20260726_041712/ in the Azure portal — all 6 files present (manifest.json, mariadb-booking, mariadb-reporting, mysql-animals, mysql-shelter, pgsql-workshop2.dump), all "Available", confirming the API-based verification above](images/14-backup-files-in-blob.png)
+![backups/20260726_041712/ in the Azure portal, all 6 files present (manifest.json, mariadb-booking, mariadb-reporting, mysql-animals, mysql-shelter, pgsql-workshop2.dump), all "Available", confirming the API-based verification above](images/14-backup-files-in-blob.png)
 
 ## Where things live
 
@@ -203,4 +203,4 @@ that all 6 files (`manifest.json` + 5 dumps) actually exist in
 | Routine-grant fix (all 4 DB playbooks) | `infrastructure/ansible/playbooks/linux-{mysql,mysql-2,mariadb,mariadb-2}.yml` |
 | Vault secret (2 new fields on the existing path) | `secret/animal-shelter-workshop` (`azure_backup_sas_token`, `azure_backup_container_url`) |
 | Azure resources | Resource group `homelab-stage8`; Storage Account `aswbackupstaufiq`; container `backups`; budget `homelab-stage8-guardrail` |
-| This write-up | `proxmox-homelab-taufiq/docs/devops-plan/azure-cloud-backup-sync.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/09-azure-cloud-backup-sync.md` (homelab meta-repo) |

@@ -128,7 +128,7 @@ finishing a real gap, not tidying up something that already works:
       the automation token had zero Proxmox ACL grants, the provider's SSH
       connection for cloud-init snippet upload resolved the node's
       unreachable LAN IP, and the VMs had no VLAN tag at all so they never
-      got a DHCP lease. Full story: `docs/devops-plan/terraform-first-real-loop.md`
+      got a DHCP lease. Full story: `docs/19-devops-practice/01-terraform-first-real-loop.md`
 - [x] Fix the known blocker before declaring success: add a task (cloud-init
       user-data, or an early Ansible play) that creates the `taufiq` user on
       a fresh VM — `app-server.yml` is documented to fail without it.
@@ -161,7 +161,7 @@ finishing a real gap, not tidying up something that already works:
       scratch container *before* ever touching the real production
       containers (byte-identical `pct config` before/after); `locals { vms
       }` extracted into `modules/proxmox-vm/`. Full story:
-      `docs/devops-plan/terraform-state-import-and-module.md`
+      `docs/19-devops-practice/02-terraform-state-import-and-module.md`
 
 **Capacity note:** `vms.tf` configures all 4 test VMs at 2048 MB each — booting
 them all at once is another ~8 GB on top of the ~17.9 GB already allocated to
@@ -352,7 +352,7 @@ the cluster.
       **Done** — stopped `node_exporter` on `linux-k3s`, `InstanceDown`
       fired to Telegram in ~2.5 min, root cause found blind via Loki
       (`systemctl stop` journal entry), resolved cleanly on restart.
-      Full writeup: `docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`
+      Full writeup: `docs/19-devops-practice/07-observability-prometheus-grafana-loki-alertmanager.md`
 
 ---
 
@@ -408,7 +408,7 @@ cheapest").
 ### Step 1 — the budget guardrail — DONE (2026-07-26)
 
 - [x] Monthly budget `homelab-stage8-guardrail`, $10, expiring 4/30/2027,
-      alerts at 50/80/100%. Full story: `docs/devops-plan/azure-cloud-backup-sync.md`
+      alerts at 50/80/100%. Full story: `docs/19-devops-practice/09-azure-cloud-backup-sync.md`
 
 ### Step 2 — Blob Storage (the S3 equivalent) — DONE (2026-07-26)
 
@@ -422,7 +422,7 @@ cheapest").
       that could fail a healthy deploy (`b55b624`), and a documented
       MySQL/MariaDB grant that had silently reverted because it was never
       codified into Ansible (`dc34d09`). Full story, including both bugs:
-      `docs/devops-plan/azure-cloud-backup-sync.md`
+      `docs/19-devops-practice/09-azure-cloud-backup-sync.md`
 
 ### Step 3 — Azure Functions (the Lambda equivalent) — DONE (2026-07-26/27)
 
@@ -433,7 +433,7 @@ cheapest").
       **Bug found and fixed:** first deploy 503'd everywhere — traced to
       Node 24 not being fully supported by the Functions host runtime yet,
       despite the CLI recommending it; Node 22 fixed it immediately. Full
-      story: `docs/devops-plan/azure-functions-vault-tailscale-funnel.md`
+      story: `docs/19-devops-practice/10-azure-functions-vault-tailscale-funnel.md`
 
 ### Step 4 — stretch: Terraform talking to a second provider — DONE (2026-07-26/27)
 
@@ -445,7 +445,7 @@ cheapest").
       real SSH: hostname matched, "up 0 min" confirmed a genuine fresh boot.
       Destroyed immediately after (`terraform destroy`, then deleted the
       temporary Service Principal) — nothing left running. Full story:
-      `docs/devops-plan/terraform-azurerm-stretch-goal.md`
+      `docs/19-devops-practice/11-terraform-azurerm-stretch-goal.md`
 
 **This was the last item in the entire devops-practice-plan.** All 8 stages
 are now complete.

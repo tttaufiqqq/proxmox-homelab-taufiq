@@ -121,7 +121,7 @@ g_vfs_done(): iso9660/OPNSENSE_INSTALL[READ(offset=...,length=2048)]error = 5
 Reserved since this plan's original build, VLAN 80 finally got a real guest —
 `linux-observability` (CT 114, Prometheus/Grafana/Loki/Alertmanager) — as
 part of `devops-practice-plan.md`'s Stage 6. Full stage write-up:
-[`docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`](../devops-plan/observability-prometheus-grafana-loki-alertmanager.md).
+[`docs/19-devops-practice/07-observability-prometheus-grafana-loki-alertmanager.md`](../devops-plan/07-observability-prometheus-grafana-loki-alertmanager.md).
 This section is specifically the VLAN/firewall side of that work.
 
 **Broke:** the new CT got a real DHCP lease (`10.0.80.100`, gateway

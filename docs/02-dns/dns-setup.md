@@ -1316,7 +1316,7 @@ This is a local `~/.ssh/config` change only, not part of this git repo — this 
 
 Prompted directly by a request to make sure every VM/CT has both DNS and an
 SSH alias, at the end of the same session that built Stage 6
-(`docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`).
+(`docs/19-devops-practice/07-observability-prometheus-grafana-loki-alertmanager.md`).
 Re-ran §12's method once more: `pct list`/`qm list` on Proxmox compared
 against the live `/etc/dnsmasq.conf` and `~/.ssh/config`, both read live.
 
