@@ -411,9 +411,9 @@ Not started yet, tracked here as it happens, same table shape as
 | `linux-mariadb` | Done, colors verified programmatically. Was already running (see Notes item 7). |
 | `linux-postgres` | Done, colors verified programmatically. Was already running (see Notes item 7). |
 | `linux-mini-io` | Done, colors verified programmatically. Was already running (see Notes item 7). |
-| `linux-sql-server` | Pending, still off, needs power on/customize/power off |
-| `spring-boot-app` | Pending, still off, needs power on/customize/power off |
-| `linux-oracle-db` | Pending, still off, needs power on/customize/power off |
+| `linux-sql-server` | Done, colors verified. Powered on, customized, powered back off (original state restored). |
+| `spring-boot-app` | Done, colors verified. Powered on, customized, powered back off (needed a longer shutdown timeout, see Notes). |
+| `linux-oracle-db` | Done, colors verified. Powered on, customized (binary copied from `linux-vault` over Tailscale, see Notes), powered back off. |
 | `taufiq` | Pending (host node, own section above) |
 
 ## Notes (rollout findings so far)
@@ -500,3 +500,18 @@ Not started yet, tracked here as it happens, same table shape as
    clean. Concluded it was a one-off transient hiccup, not an OPNsense
    block or a host-specific network gap like `linux-vault`/`linux-oracle-db`
    had during the MOTD rollout, no lasting fix needed.
+9. **`spring-boot-app`'s graceful shutdown (`qm shutdown`) timed out on the
+   first attempt** ("VM quit/powerdown failed - got timeout"), left running.
+   A retry with an explicit longer `--timeout 60` succeeded. Likely just a
+   slow-stopping Spring Boot service, not investigated further since the
+   retry worked cleanly.
+10. **`linux-oracle-db` hit the exact same tailnet-wide DNS gap documented
+    in `docs/17-custom-ssh-motd` Notes item 11**, and still has no sudo at
+    all for this SSH user. Since oh-my-posh's binary-only install needs no
+    root, the only blocker was downloading it, worked around by copying
+    the binary this rollout already fetched onto `linux-vault` straight
+    across Tailscale (`scp` host-to-host) instead of touching this host's
+    DNS or `su -`ing in to fix it, same "borrow it from a peer with working
+    DNS" approach used for `figlet` there originally. Powered back off via
+    `qm shutdown` from the Proxmox host itself, which doesn't need the
+    guest's own sudo/root at all.
