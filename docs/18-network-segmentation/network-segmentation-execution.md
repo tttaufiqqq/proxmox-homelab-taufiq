@@ -116,9 +116,58 @@ g_vfs_done(): iso9660/OPNSENSE_INSTALL[READ(offset=...,length=2048)]error = 5
 
 ---
 
+## VLAN 80 Activation — 26 July 2026 (Stage 6, Observability)
+
+Reserved since this plan's original build, VLAN 80 finally got a real guest —
+`linux-observability` (CT 114, Prometheus/Grafana/Loki/Alertmanager) — as
+part of `devops-practice-plan.md`'s Stage 6. Full stage write-up:
+[`docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`](../devops-plan/observability-prometheus-grafana-loki-alertmanager.md).
+This section is specifically the VLAN/firewall side of that work.
+
+**Broke:** the new CT got a real DHCP lease (`10.0.80.100`, gateway
+`10.0.80.1`) — confirming OPNsense's interface + Kea DHCP for VLAN 80 were
+already live from the original build — but had **zero internet egress**.
+Not slow, genuinely blocked: `ping 10.0.80.1` itself was 100% packet loss,
+so even the gateway was unreachable, let alone anything beyond it.
+
+**Found it:** exactly what "reserved but ruleless" (this doc's own
+§Where Things Stand, before this update) predicted — VLAN 80 had an
+interface and DHCP but had never had firewall rules written for it, unlike
+VLANs 20/30/40. Confirmed via `qm config 200 | grep net` that OPNsense's
+`net8` (VLAN 80, MAC `BC:24:11:DF:45:00`) already existed at the hypervisor
+level; the gap was entirely on the OPNsense rules side.
+
+**Recovered:** added the same two-rule pattern as every other active VLAN,
+via the OPNsense web GUI (reached through an SSH tunnel —
+`ssh -L 8443:10.0.10.1:443 proxmox`, since the GUI only lives on the
+Management VLAN and isn't reachable directly from a Windows client):
+
+1. **`VLAN 80 - internet only, block other VLANs`** — Pass, Interface
+   `VLAN80_Observability`, Protocol any, Source `10.0.80.0/24`, Destination
+   `10.0.0.0/8` with **Invert Destination** checked.
+2. **`VLAN 80 - DNS to OPNsense`** — Pass, Interface `VLAN80_Observability`,
+   Protocol TCP/UDP, Source `10.0.80.0/24`, Destination `This Firewall`,
+   port `53` — the exact same gap as bug #6 above (DNS to OPNsense itself),
+   added proactively this time instead of rediscovering it the hard way.
+
+Both rules saved and applied; re-tested from the CT immediately after —
+`ping 8.8.8.8` succeeded, `getent hosts tailscale.com` resolved cleanly, and
+the Tailscale install (which had been hanging on `curl` this whole time)
+completed within seconds.
+
+![Rule 1 (internet-only) edit form, saved correctly](images/20-vlan80-rule1-internet-only.png)
+![Firewall rules list showing rule 1 applied, plus a pre-existing floating DNS rule](images/21-vlan80-rules-list-rule1-applied.png)
+![Rule 2 (DNS to OPNsense) edit form for VLAN 80](images/22-vlan80-rule2-dns-to-opnsense.png)
+
+One thing noticed, not a problem: a **pre-existing floating rule**
+(`TCP/UDP * → This Firewall :53`, bound to 3 interfaces) already covered DNS
+for the original 3 active VLANs. Adding VLAN 80's own interface-specific DNS
+rule alongside it is redundant but harmless — both simply match, no
+conflict.
+
 ## Where Things Stand
 
-All 13 VMs/CTs are tagged onto their correct VLAN, booted, and confirmed reachable at their reserved IPs. Firewall rules for the 3 active VLANs (20/30/40) are in place and tested end-to-end: DB tier isolated from Personal, Personal blocked from reaching App/Secrets and DB, the one specific Spring Boot → Oracle path works, internet access works everywhere it should, and Management stays unreachable from every VLAN except the Proxmox host itself. VLANs 50/60/70/80 stay reserved and ruleless until something actually gets deployed there.
+All 13 VMs/CTs are tagged onto their correct VLAN, booted, and confirmed reachable at their reserved IPs. Firewall rules for the 4 active VLANs (20/30/40/80) are in place and tested end-to-end: DB tier isolated from Personal, Personal blocked from reaching App/Secrets and DB, the one specific Spring Boot → Oracle path works, internet access works everywhere it should, VLAN 80 has internet + DNS but no cross-VLAN reach, and Management stays unreachable from every VLAN except the Proxmox host itself. VLANs 50/60/70 stay reserved and ruleless until something actually gets deployed there.
 
 Independently reproduced afterward from my own terminal, not the same SSH
 session the original tests ran from — same results both times:
