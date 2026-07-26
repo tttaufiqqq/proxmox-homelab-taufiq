@@ -22,6 +22,7 @@
 12. [Coverage Audit — 19 July 2026](#12-coverage-audit--19-july-2026)
 13. [Reference — All IPs and Names](#13-reference--all-ips-and-names)
 14. [SSH Alias Coverage — 24 July 2026](#14-ssh-alias-coverage--24-july-2026)
+15. [Coverage Audit — 26 July 2026 (Stage 6)](#15-coverage-audit--26-july-2026-stage-6-observability)
 
 ---
 
@@ -1311,8 +1312,86 @@ This is a local `~/.ssh/config` change only, not part of this git repo — this 
 
 ---
 
+## 15. Coverage Audit — 26 July 2026 (Stage 6, Observability)
+
+Prompted directly by a request to make sure every VM/CT has both DNS and an
+SSH alias, at the end of the same session that built Stage 6
+(`docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`).
+Re-ran §12's method once more: `pct list`/`qm list` on Proxmox compared
+against the live `/etc/dnsmasq.conf` and `~/.ssh/config`, both read live.
+
+### Finding: two new guests from this session needed both from scratch
+
+`linux-k3s` (CT 100, built in Stage 5, 2026-07-26) and `linux-observability`
+(CT 114, built in Stage 6, same session) had **neither** a DNS record nor an
+SSH alias — `linux-k3s` had been missing both since Stage 5, never caught
+because nothing had needed to SSH to it by name until this session.
+`linux-observability` was brand new. Both were also missing a non-root SSH
+user entirely (unlike every other hand-built CT here) — created one on each
+matching the established convention (username = hostname, sudo, same shared
+`iphone-11-taufiq` key), added `address=` records for both (plus `k3s`/
+`observability` short aliases) to `/etc/dnsmasq.conf`, and added both to
+`~/.ssh/config`. Confirmed via a full `systemctl restart dnsmasq` (not
+`reload` — see §12b) and a live SSH connection to each, `whoami` returning
+the expected username.
+
+### Finding: `app-server.taufiq.lab` — the gap flagged in §12, still open
+
+§12 (19 July) found this exact gap and left it unfixed as "low-priority."
+Confirmed still open via `dig @127.0.0.1 app-server.taufiq.lab` returning
+`NXDOMAIN`. Fixed this time: added
+`address=/app-server.taufiq.lab/100.100.123.90` to `/etc/dnsmasq.conf`
+(same IP as the existing `linux-app-server.taufiq.lab`/`app.taufiq.lab`
+records — VM 101's actual Proxmox-registered name is `app-server`, not
+`linux-app-server`, so this alias matches what the hypervisor itself calls
+it), full `dnsmasq` restart, confirmed resolving. Added a matching
+`Host app-server` block to `~/.ssh/config`, confirmed connecting cleanly
+(`whoami` → `taufiq`, same user as `linux-app-server`).
+
+**Worth noting, not a bug:** a *different*, unrelated Tailscale device also
+happens to be named literally `app-server` — a stale/offline node left over
+from Stage 1's torn-down Terraform test VMs (`tailscale status` still lists
+it, offline, last seen hours-old). This new `app-server.taufiq.lab` dnsmasq
+record is completely independent of Tailscale's own device naming — it
+resolves via dnsmasq to the real VM 101's Tailscale IP directly, so the
+stale device's name never enters into it.
+
+### Conclusion
+
+Every VM/CT actually running in this homelab (15 guests: the 13 already
+covered as of §14, plus `linux-k3s` and `linux-observability` from this
+session) now resolves under `taufiq.lab` and has a working short SSH alias,
+each one actually connected to and confirmed with `whoami` — not just
+"config looks right." One previously-known gap (`app-server.taufiq.lab`)
+closed in the same pass rather than left open again.
+
+| Hostname | DNS | SSH alias |
+|---|---|---|
+| proxmox | ✅ | ✅ |
+| app-server (`linux-app-server` VM) | ✅ (+ fixed `app-server.taufiq.lab` gap) | ✅ (+ new `app-server` alias) |
+| linux-mysql | ✅ | ✅ |
+| linux-mysql-2 | ✅ | ✅ |
+| linux-mariadb | ✅ | ✅ |
+| linux-mariadb-2 | ✅ | ✅ |
+| linux-postgres | ✅ | ✅ |
+| linux-oracle-db | ✅ | ✅ |
+| linux-sql-server | ✅ | ✅ |
+| spring-boot-app | ✅ | ✅ |
+| linux-mini-io | ✅ | ✅ |
+| linux-mongodb | ✅ | ✅ |
+| linux-vault | ✅ | ✅ |
+| linux-gh-runner | ✅ | ✅ |
+| linux-k3s | ✅ (new this session) | ✅ (new this session, + new SSH user) |
+| linux-observability | ✅ (new this session) | ✅ (new this session, + new SSH user) |
+
+Not covered by design: `opnsense` (VM 200, the router itself — reached via
+its own web GUI or SSH tunnel, not a fleet SSH alias) and
+`ubuntu-2404-template` (VM 9000, a stopped template, never booted).
+
+---
+
 *Documentation generated: 2 July 2026*  
-*Last coverage audit: 19 July 2026 — see §12*  
+*Last coverage audit: 26 July 2026 — see §15*  
 *SSH alias coverage completed: 24 July 2026 — see §14*  
 *Lab domain: taufiq.lab*  
 *DNS server: dnsmasq on Proxmox (100.97.8.93)*  
