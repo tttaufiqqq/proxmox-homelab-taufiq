@@ -67,7 +67,7 @@ new, permanent guest:
 | 3 — CI/CD | none (pipeline logic only) | — | — |
 | 4 — Docker | none required; Harbor is optional/deferred | Harbor ≈ 2+ GB if added later | Deferred by Stage 4's own capacity note |
 | 5 — k3s | 1 new CT | start 1.5-2 GB, 1 core | **Yes** |
-| 6 — Observability | 1 new CT/VM (Prometheus+Grafana+Loki+Alertmanager — not yet assigned a host in Stage 6, assume one dedicated CT, same pattern as Vault/MinIO/Mongo) | ≈ 2-3 GB, 2 cores | **Yes** |
+| 6 — Observability | **Done** — 1 new CT (`linux-observability`, 114, VLAN 80): Prometheus+Grafana+Loki+Alertmanager, same pattern as Vault/MinIO/Mongo | 1 core / 1.5GB (started small, same lesson as Stage 5's k3s CT) | **Yes** |
 | 7 — GitOps | no new guest — ArgoCD installs *inside* Stage 5's k3s node | adds ≈ 1-2 GB *to* that same node | **Yes** (grows Stage 5's footprint) |
 | 8 — Public Cloud | none — runs on AWS/GCP, not this host | — | — |
 
@@ -121,27 +121,47 @@ creates a `workshop` user, not the `taufiq` user the playbook now assumes.
 That's a documented, unfixed blocker, not a hypothetical. Treat this stage as
 finishing a real gap, not tidying up something that already works:
 
-- [ ] Run `terraform init` → `plan` → `apply` for real, start to finish, and
+- [x] Run `terraform init` → `plan` → `apply` for real, start to finish, and
       get all 4 VMs to actually boot and join Tailscale — do not assume this
-      currently works just because the code and the bug-fix history exist
-- [ ] Fix the known blocker before declaring success: add a task (cloud-init
+      currently works just because the code and the bug-fix history exist.
+      **Done 2026-07-26** — took far more than the one documented blocker:
+      the automation token had zero Proxmox ACL grants, the provider's SSH
+      connection for cloud-init snippet upload resolved the node's
+      unreachable LAN IP, and the VMs had no VLAN tag at all so they never
+      got a DHCP lease. Full story: `docs/devops-plan/terraform-first-real-loop.md`
+- [x] Fix the known blocker before declaring success: add a task (cloud-init
       user-data, or an early Ansible play) that creates the `taufiq` user on
-      a fresh VM — `app-server.yml` is documented to fail without it
-- [ ] Run the full loop for real, once: `apply` → `ansible-playbook
+      a fresh VM — `app-server.yml` is documented to fail without it.
+      **Done** — added to `cloud-init.yml.tftpl` alongside `workshop`
+- [x] Run the full loop for real, once: `apply` → `ansible-playbook
       playbooks/site.yml` against the fresh 201/204/205/206 VMs → confirm
-      the app actually serves a request, not just that packages installed
-- [ ] Decide deliberately what happens to the result — tear the 200-series
+      the app actually serves a request, not just that packages installed.
+      **Done** — also needed a MySQL/MariaDB root-auth bootstrap task (fresh
+      installs default to socket auth, not the shared password) and a
+      `/home/taufiq` permission fix (www-data couldn't traverse into it).
+      `curl` returned a real rendered Laravel homepage, HTTP 200. Full
+      `db:seed` run also uncovered `fakerphp/faker` was require-dev only,
+      breaking production's `--no-dev` install — fixed and verified via a
+      full 363-test backend suite run on `linux-gh-runner` before pushing
+- [x] Decide deliberately what happens to the result — tear the 200-series
       VMs back down (they were meant as a parallel proof, not a migration
       target) and document "proven once, on this date," or keep them as a
       genuine second environment. Either is fine; an undocumented decision
-      isn't
-- [ ] Only after that first successful run, layer on the harder exercises:
+      isn't. **Torn down 2026-07-26**, immediately after verification
+- [x] Only after that first successful run, layer on the harder exercises:
       bring `linux-mysql-2`/`linux-mariadb-2` (currently manual CTs) into
       Terraform or explicitly decide they stay manual; move state onto
       self-hosted MinIO's S3-compatible backend instead of a local
       `.tfstate`; extract the `locals { vms = {...} }` pattern into a real
       reusable module. State-management exercises on top of an unproven
-      base don't teach much — get the base working first
+      base don't teach much — get the base working first.
+      **Done 2026-07-26** — all three: MinIO S3-compatible backend live on
+      `linux-mini-io` (bucket-scoped credential, not root); both CTs adopted
+      via `terraform import`, validated zero-drift against a disposable
+      scratch container *before* ever touching the real production
+      containers (byte-identical `pct config` before/after); `locals { vms
+      }` extracted into `modules/proxmox-vm/`. Full story:
+      `docs/devops-plan/terraform-state-import-and-module.md`
 
 **Capacity note:** `vms.tf` configures all 4 test VMs at 2048 MB each — booting
 them all at once is another ~8 GB on top of the ~17.9 GB already allocated to
@@ -163,22 +183,22 @@ production already. Fixing Stage 1's blocker means touching this exact
 Ansible/cloud-init boundary anyway, so do these two stages back to back.
 What's still genuinely open:
 
-- [ ] `playbooks/tasks/vault-agent.yml` is one task file, not a role —
+- [x] `playbooks/tasks/vault-agent.yml` is one task file, not a role —
       convert it (and the shared pieces of the five DB playbooks) into a
       real `roles/` structure with `tasks/`, `handlers/`, `templates/`,
       `defaults/`
-- [ ] Formally verify idempotency: run each playbook twice back-to-back and
+- [x] Formally verify idempotency: run each playbook twice back-to-back and
       confirm zero `changed` tasks on the second run; for any task that
       always reports changed (a restart handler, a template re-render),
       decide whether that's correct or a bug, don't just assume
-- [ ] Try **Molecule** against the smallest playbook (`linux-postgres.yml`)
+- [x] Try **Molecule** against the smallest playbook (`linux-postgres.yml`)
       for real automated testing, instead of eyeballing `--check` output
-- [ ] `group_vars/all.yml` documents, in its own comments, that the shared
+- [x] `group_vars/all.yml` documents, in its own comments, that the shared
       MySQL/MariaDB root credential is deliberately plaintext — unlike
       `asw_secrets`, which is Vault-backed. Closing that one named
       exception (routing it through Vault too) is a concrete, scoped
       improvement, not hypothetical hardening
-- [ ] Once roles exist, extend management to the homelab-level CTs
+- [x] Once roles exist, extend management to the homelab-level CTs
       currently provisioned by hand from docs (`linux-vault`,
       `linux-gh-runner`, `linux-mini-io`, `linux-mongodb`) — good next
       targets since they're simpler, single-purpose hosts
@@ -198,21 +218,35 @@ scope of this stage. Doing this stage third means the Terraform-drift item
 below is now actually achievable, since Stage 1 will have made Terraform work
 for the first time. The real remaining gaps:
 
-- [ ] `deploy-db` has **no rollback by design** — it fails loud because
+- [x] `deploy-db` has **no rollback by design** — it fails loud because
       there's no safe automatic reversal of an `apt install` or a UFW
       change. Add a pre-playbook backup step (`mysqldump`/`pg_dump` before
       `site.yml --limit databases` runs) so a bad DB change has an actual
-      recovery path instead of just a documented shrug
-- [ ] Terraform isn't wired into CI/CD at all right now — `deploy.yml` only
+      recovery path instead of just a documented shrug — done 2026-07-26,
+      reuses the existing coordinated `php artisan db:backup` (a new
+      one-shot `agent-backup.hcl` Vault Agent config) rather than raw
+      per-host dumps, which this repo already tried and retired
+- [x] Terraform isn't wired into CI/CD at all right now — `deploy.yml` only
       runs `ansible-playbook`. Auto-`apply` is too destructive to automate
       blindly, but add a scheduled or manual `terraform plan` job that
       posts drift to a job summary, so infra drift is visible without
-      someone running it locally and remembering to check
-- [ ] The current smoke test only asserts the aggregate `5/5 online` string
+      someone running it locally and remembering to check — done
+      2026-07-26, `terraform-drift.yml`, own Vault path/policy/token
+      (`secret/asw-terraform-cd`) kept separate from `asw-cd`'s app-deploy
+      secrets, Terraform installed on `linux-gh-runner`
+- [x] The current smoke test only asserts the aggregate `5/5 online` string
       — a single connection failing (say, just `postgres`) still passes as
       long as the other 4 are up. Break out a per-connection check so a
       partial DB outage fails the deploy loudly instead of hiding behind an
-      aggregate pass
+      aggregate pass — done 2026-07-26, `db:refresh-status --fail-on-down`
+      (scheduler's own plain invocation untouched, still always succeeds)
+- [x] **Bonus fix, found while doing the above:** `deploy.yml`'s path-based
+      routing regexes never picked up `roles/` after Stage 2's roles
+      refactor, so a roles-only change silently deployed as if nothing had
+      changed — confirmed live (Stage 2's own roles-refactor push ran
+      `deploy-app` with `--tags deploy` only, skipping the provision-tagged
+      Vault Agent role). Fixed 2026-07-26: `roles/` now widens both
+      `INFRA_APP` and `INFRA_DB`
 - [ ] Once Stage 6 exists, feed deploy frequency/duration into it instead
       of treating every pipeline run as a one-off with no historical view
 
@@ -225,14 +259,14 @@ builds. No dependency on Stages 1-3; this is genuinely new ground — no
 Dockerfile exists in the repo today, `app-server.yml` installs PHP/Nginx
 straight onto the VM.
 
-- [ ] Write a multi-stage `Dockerfile` for the Laravel app (Composer/npm
+- [x] Write a multi-stage `Dockerfile` for the Laravel app (Composer/npm
       build stage + slim `php-fpm` runtime stage, matching the PHP 8.3 +
       extensions `app-server.yml` already installs)
-- [ ] Write a `docker-compose.yml` wiring the container to one local test
+- [x] Write a `docker-compose.yml` wiring the container to one local test
       DB (not all 5 — that's what the real Tailscale-connected VMs/CTs are
       for), separate from the real Proxmox DB fleet
-- [ ] Practice image tagging/versioning (`v1.0.0`, `latest`)
-- [ ] Push images to a registry — Docker Hub, or self-host **Harbor** in
+- [x] Practice image tagging/versioning (`v1.0.0`, `latest`)
+- [x] Push images to a registry — Docker Hub, or self-host **Harbor** in
       the homelab for extra practice. **Capacity note:** Harbor's own stack
       (core + Postgres + Redis + registry + trivy) realistically wants
       2+ GB of RAM — on a host with ~1.4 GB actually free right now (see
@@ -255,29 +289,33 @@ plenty of CPU headroom (95-98% idle) but only ~1.4 GB RAM actually free, with
 1.3 GB already parked in swap under the normal fleet. That changes how this
 stage should be built, not whether it can be:
 
-- [ ] Run k3s in an **LXC container, not a VM** — same reasoning already
+- [x] Run k3s in an **LXC container, not a VM** — same reasoning already
       used for `linux-vault`/`linux-gh-runner`/`linux-mongodb`, and it skips
       a second guest kernel's overhead, which matters on a host this tight
       on RAM
-- [ ] Start deliberately small — 1 core / 1.5-2 GB — and check `free -h` +
+- [x] Start deliberately small — 1 core / 1.5-2 GB — and check `free -h` +
       swap on `proxmox` before scaling up, instead of assuming a k3s
       "minimum recommended" config just fits
-- [ ] Stand up a single-node k3s cluster on one CT
-- [ ] Get Stage 4's `Animal-Shelter-Workshop` image running manually as one
+- [x] Stand up a single-node k3s cluster on one CT
+- [x] Get Stage 4's `Animal-Shelter-Workshop` image running manually as one
       Pod via `kubectl run`
-- [ ] Write a proper `Deployment` + `Service` YAML for it
-- [ ] Kill the pod on purpose, confirm it self-heals via replicas
-- [ ] Add a `ConfigMap` and `Secret` for its config (start with non-DB
+- [x] Write a proper `Deployment` + `Service` YAML for it
+- [x] Kill the pod on purpose, confirm it self-heals via replicas
+- [x] Add a `ConfigMap` and `Secret` for its config (start with non-DB
       config; wiring the real 5-connection DB setup into k3s config is a
       later, harder step, not this one)
-- [ ] Explore the **Vault Agent Injector** for Kubernetes (ties Vault into
+- [x] Explore the **Vault Agent Injector** for Kubernetes (ties Vault into
       k3s directly)
-- [ ] Once comfortable, expand to 2+ nodes — this is the point where RAM
+- [x] Once comfortable, expand to 2+ nodes — this is the point where RAM
       most likely runs out on a single 4-core/15.9 GB host, and pairs with
       adding a second physical Proxmox node rather than squeezing a second
-      k3s node onto the same box
-- [ ] Practice scheduling, taints/tolerations, and node draining for
-      maintenance
+      k3s node onto the same box — **deferred, documented**: this homelab
+      has exactly one standalone Proxmox host (no cluster), so real
+      multi-node expansion isn't possible yet; revisit if a second physical
+      node is ever added
+- [x] Practice scheduling, taints/tolerations, and node draining for
+      maintenance — proven on the single node (taint/toleration side by
+      side, full cordon/drain/uncordon cycle)
 
 ---
 
@@ -290,17 +328,31 @@ immediately absorb Stage 3's deploy-frequency/duration goal and give you
 something to watch once Stage 7 (GitOps) starts making automatic changes to
 the cluster.
 
-- [ ] Install `node_exporter` on every VM
-- [ ] Point Prometheus at all VMs, build one fleet-wide Grafana dashboard
-      (CPU/RAM/disk)
-- [ ] Install Promtail on each VM, ship `journalctl` output to Loki
-- [ ] Practice correlating a metrics spike with what was happening in the
-      logs at that exact time
-- [ ] Configure Alertmanager to fire a Discord/Telegram webhook on disk
-      >90% or a service going unresponsive
-- [ ] Test it for real: deliberately fill a disk or kill a service,
+- [x] Install `node_exporter` on every VM. **Done** — new Ansible role
+      (`roles/node_exporter`), applied fleet-wide via `playbooks/
+      node-exporter-fleet.yml` to all 12 live hosts (`monitoring_targets`
+      group), restricted to `tailscale0` via UFW.
+- [x] Point Prometheus at all VMs, build one fleet-wide Grafana dashboard
+      (CPU/RAM/disk). **Done** — new CT `linux-observability` (114, VLAN
+      80), Prometheus scraping all 12 targets, Grafana dashboard
+      `asw-fleet-overview` with CPU/RAM/disk panels per host.
+- [x] Install Promtail on each VM, ship `journalctl` output to Loki.
+      **Done** — new `roles/promtail`, Loki on `linux-observability`,
+      all 12 hosts confirmed shipping logs.
+- [x] Practice correlating a metrics spike with what was happening in the
+      logs at that exact time. **Done** — real CPU load test on
+      `linux-gh-runner`, marker log lines bracketed a clean 100% CPU
+      spike in Prometheus, confirmed via Loki query.
+- [x] Configure Alertmanager to fire a Discord/Telegram webhook on disk
+      >90% or a service going unresponsive. **Done** — Alertmanager with
+      a Telegram receiver (`InstanceDown`, `HighDiskUsage` rules).
+- [x] Test it for real: deliberately fill a disk or kill a service,
       confirm the alert fires, then diagnose using only the
-      dashboard/logs (no cheating by remembering what was broken)
+      dashboard/logs (no cheating by remembering what was broken).
+      **Done** — stopped `node_exporter` on `linux-k3s`, `InstanceDown`
+      fired to Telegram in ~2.5 min, root cause found blind via Loki
+      (`systemctl stop` journal entry), resolved cleanly on restart.
+      Full writeup: `docs/devops-plan/observability-prometheus-grafana-loki-alertmanager.md`
 
 ---
 
@@ -317,13 +369,30 @@ that had only ~1.4 GB free before any of this plan started. If Stage 5's
 "expand to 2+ nodes" already required a second physical Proxmox node, ArgoCD
 belongs on that expanded cluster, not squeezed onto the original box alone.
 
-- [ ] Install **ArgoCD** in the k3s cluster
-- [ ] Point it at `Animal-Shelter-Workshop`'s own repo — put Stage 5's
-      manifests in a `k8s/` directory there rather than a separate repo
-- [ ] Make a change in git (bump replicas, change an env var), confirm
-      ArgoCD auto-syncs it into the cluster
-- [ ] Make a manual change directly in the cluster with `kubectl edit`,
-      confirm ArgoCD detects the drift and reverts it back to match git
+- [x] Install **ArgoCD** in the k3s cluster. **Done** — official stable
+      manifests, `argocd` namespace, all 7 components `Running`. The
+      `applicationsets.argoproj.io` CRD was too large for a plain
+      `kubectl apply` (last-applied-configuration annotation over the
+      256KB limit) — fixed with `--server-side --force-conflicts`.
+- [x] Point it at `Animal-Shelter-Workshop`'s own repo — put Stage 5's
+      manifests in a `k8s/` directory there rather than a separate repo.
+      **Done** — `Application` resource `animal-shelter-workshop`, repo
+      `https://github.com/tttaufiqqq/Animal-Shelter-Workshop.git`,
+      `path: k8s`, `targetRevision: main`, `syncPolicy.automated`
+      (`prune: true`, `selfHeal: true`). Adopted the existing Stage 5
+      Deployment cleanly — same Pods, no restart, immediately `Synced`/
+      `Healthy`.
+- [x] Make a change in git (bump replicas, change an env var), confirm
+      ArgoCD auto-syncs it into the cluster. **Done** — bumped
+      `asw-app` from 2 to 3 replicas in `k8s/deployment.yaml`, pushed
+      (`cd53331`), forced a hard refresh; ArgoCD synced it and a third
+      Pod came up `2/2 Running` within seconds.
+- [x] Make a manual change directly in the cluster with `kubectl edit`,
+      confirm ArgoCD detects the drift and reverts it back to match git.
+      **Done** — `kubectl patch deployment asw-app` to 5 replicas;
+      `selfHeal: true` caught it as `OutOfSync` and reverted to 3 within
+      ~10 seconds, confirmed via `kubectl -n argocd get events`
+      (`Initiated automated sync` → `Partial sync operation ... succeeded`).
 
 ---
 
@@ -331,194 +400,55 @@ belongs on that expanded cluster, not squeezed onto the original box alone.
 
 **Goal:** a genuine hybrid-cloud story, not purely on-prem. No dependency on
 any other stage — can genuinely be done anytime, kept last because it's a
-stretch goal. Already have the account — **Azure for Students**, checked
-2026-07-26:
-
-![Azure for Students Benefits page — $87.61 of $100 credit remaining, "Always free services" tile listing Advisor, API Management, App Configuration, Azure App Service, Automation, Azure AI Bot Service, AI Immersive Reader, Azure AI Language](devops-plan-images/02-azure-student-benefits.png)
-
-**The real constraint is the $87.61 left, not the technology.** The credit
-was confirmed to expire March 2027 — call it 8 months of runway from today.
-$87.61 ÷ 8 ≈ **$10.95/month** is the actual budget line, not "whatever's
-cheapest," and none of the 3 services below are on the "Always free" tile —
-Storage, Functions, and VMs all draw from that $87.61 (Functions has its own
-separate perpetual free execution grant on top, see below, but the Storage
-Account underneath it still draws from credit, just negligibly).
+stretch goal. Account already existed — **Azure for Students**, checked
+2026-07-26, $87.61 of $100 credit remaining, expiring March 2027 (~8 months
+of runway, ~$10.95/month is the real budget line, not "whatever's
+cheapest").
 
 ### Step 1 — the budget guardrail — DONE (2026-07-26)
 
-![Azure Create Budget wizard, filled in — Name homelab-stage8-guardrail, Reset period Monthly, Creation date July 2026, Expiration date April 2027, Amount 10](devops-plan-images/04-azure-create-budget-filled.png)
+- [x] Monthly budget `homelab-stage8-guardrail`, $10, expiring 4/30/2027,
+      alerts at 50/80/100%. Full story: `docs/devops-plan/azure-cloud-backup-sync.md`
 
-![Set alerts step — Actual cost thresholds at 50% ($5), 80% ($8), 100% ($10), alert recipient taufiq33992@gmail.com](devops-plan-images/05-azure-set-alerts.png)
+### Step 2 — Blob Storage (the S3 equivalent) — DONE (2026-07-26)
 
-![Budgets list confirming it's live — homelab-stage8-guardrail, Monthly, 7/1/2026-4/30/2027, Budget $10.00, Evaluated spend $0.00, Progress 0.00%](devops-plan-images/06-azure-budget-list-confirmed.png)
+- [x] Storage account + private container + container-scoped SAS token
+      (no Delete), credential added to the existing
+      `secret/animal-shelter-workshop` Vault path, `AzureBackupSync` wired
+      into the existing `db:backup` command, deployed and verified live —
+      all 6 files landing in Blob on every run.
+      **2 bonus fixes found along the way** (both unrelated to this
+      stage): a `pipefail`/`SIGPIPE` bug in `deploy.yml`'s own smoke test
+      that could fail a healthy deploy (`b55b624`), and a documented
+      MySQL/MariaDB grant that had silently reverted because it was never
+      codified into Ansible (`dc34d09`). Full story, including both bugs:
+      `docs/devops-plan/azure-cloud-backup-sync.md`
 
-- [x] I named it `homelab-stage8-guardrail`
-- [x] I kept the reset period Monthly
-- [x] I set the expiration date to 4/30/2027 (one month past the credit's
-      actual March 2027 expiry)
-- [x] I set the amount to $10.00 (matches the $10.95/month pace I worked
-      out from $87.61 remaining ÷ ~8 months of runway, with a small margin)
-- [x] I set alerts at 50% ($5) / 80% ($8) / 100% ($10) actual-cost
-      thresholds, emailing `taufiq33992@gmail.com`
-- [x] I confirmed it live in the Budgets list: evaluated spend $0.00,
-      progress 0.00% — evaluation runs on a delay ("begins in a few hours"),
-      so $0.00 right now is expected, not a sign anything's broken
+### Step 3 — Azure Functions (the Lambda equivalent) — DONE (2026-07-26/27)
 
-### Step 2 — Blob Storage (the S3 equivalent)
+- [x] Function App reading a dedicated Vault demo secret over **Tailscale
+      Funnel** (the "secure tunnel" the plan called for — no new tunnel
+      tech, Tailscale's own feature), through a narrowly-scoped read-only
+      AppRole, verified live returning fresh data on every call.
+      **Bug found and fixed:** first deploy 503'd everywhere — traced to
+      Node 24 not being fully supported by the Functions host runtime yet,
+      despite the CLI recommending it; Node 22 fixed it immediately. Full
+      story: `docs/devops-plan/azure-functions-vault-tailscale-funnel.md`
 
-**Storage account and container — DONE (2026-07-26):**
+### Step 4 — stretch: Terraform talking to a second provider — DONE (2026-07-26/27)
 
-![Storage account Basics tab — Subscription Azure for Students, Resource group (New) homelab-stage8, name aswbackupstaufiq, Region Southeast Asia, Preferred storage type Azure Blob Storage, Performance Standard, Redundancy LRS](devops-plan-images/10-storage-basics-tab.png)
+- [x] New `azurerm`-provider Terraform config
+      (`infrastructure/terraform-azure/`), applied for real — hit 2 real
+      snags (Terraform's AzureCLI authorizer hung indefinitely, switched to
+      a Service Principal; the planned `Standard_B1s`/`B2s` both failed on
+      regional capacity restrictions, `Standard_D2s_v3` worked). Proved via
+      real SSH: hostname matched, "up 0 min" confirmed a genuine fresh boot.
+      Destroyed immediately after (`terraform destroy`, then deleted the
+      temporary Service Principal) — nothing left running. Full story:
+      `docs/devops-plan/terraform-azurerm-stretch-goal.md`
 
-![Containers blade showing 2 items — auto-created $logs (private, Azure's own storage-analytics container) and the new backups container (private, Available)](devops-plan-images/11-storage-containers-created.png)
-
-- [x] I created storage account `aswbackupstaufiq` in its own resource
-      group (`homelab-stage8`) — Standard performance, **LRS** redundancy
-      (cheapest tier, fine for a backup copy with no availability
-      requirement)
-![Storage account Networking tab — Public network access: Enable, scope: Enable from all networks](devops-plan-images/07-storage-networking-tab.png)
-
-- [x] I reviewed the Networking, Data protection, and Security tabs and
-      left them at their safe defaults, with one deliberate call worth
-      recording: I kept **public network access enabled, from all
-      networks** — `app-server` reaches Azure over the public internet, not
-      from inside an Azure VNet, and pinning it to a home IP would break the
-      sync whenever my ISP rotates it. The actual access control I'm relying
-      on is the scoped credential (below), not the network boundary. I left
-      "Allow anonymous access on individual containers" **unchecked** — the
-      account-level lock that keeps `backups` from ever becoming publicly
-      readable
-- [x] I created the Blob container `backups`, access level **Private (no
-      anonymous access)**
-- [x] I generated a container-scoped SAS token (Read/Write/List/Create
-      only, no Delete — a leaked token still can't destroy offsite copies),
-      expiry set to 03/30/2027 to match the credit's own lifetime
-- [x] I stored the credential in Vault as 2 new fields on the *existing*
-      `secret/animal-shelter-workshop` secret (`azure_backup_sas_token`,
-      `azure_backup_container_url`) — I reused `asw-deploy`'s existing
-      read-only policy on that path instead of standing up a new AppRole,
-      since it already had access
-- [x] I updated `env-app.j2` and `vault-agent.hcl.j2` so the new fields flow
-      through the same Vault Agent injection pipeline as Cloudinary/mail —
-      the scheduler process (which runs the nightly `db:backup`) gets them
-      automatically
-- [x] I wrote `App\Services\Backup\AzureBackupSync` and wired it into
-      `BackupDatabases.php`, right after the manifest is committed — it
-      uploads the run's dump files + `manifest.json` over the Blob REST API
-      using the SAS token, no SDK dependency needed. I made sure a sync
-      failure is caught and logged, never fails the backup command or
-      blocks pruning — the local backup is already valid regardless of the
-      offsite copy's outcome
-- [x] I didn't need a separate schedule entry — the sync rides inside the
-      already-scheduled `db:backup` (`routes/console.php`,
-      `dailyAt('02:00')`), so this also covers what would otherwise have
-      been a separate "Step 4: wire into nightly schedule" task
-![Deploy #4 succeeded — plan/deploy-app green, rollback and no-rollback-target skipped, total duration 2m 33s](devops-plan-images/13-deploy4-succeeded.png)
-
-- [x] I deployed it via the normal CD pipeline (push to `main` → `Tests` →
-      `Deploy`) — **Deploy #4, commit `b55b624`, succeeded** (2m 6s,
-      `deploy-app` green, no rollback needed)
-
-![Deploy #3 failed and auto-rolled-back to 3b67355 — job summary showing the migration caveat this pipeline already documents for rollback](devops-plan-images/12-deploy3-failed-rollback.png)
-
-- [x] **Bonus fix I found along the way, unrelated to this stage:** my
-      first deploy attempt (`Deploy #3`, commit `6de75b8`) failed and rolled
-      back — not because of my new code, but because of a pre-existing bug
-      in `deploy.yml`'s own smoke test. `echo "$OUTPUT" | grep -q '5/5
-      online'` let `grep -q` exit the instant it found a match, before
-      `echo` finished writing the rest of the (long) migration listing —
-      under `set -o pipefail`, `echo`'s resulting `SIGPIPE` failed the whole
-      step even though the health check had genuinely found `5/5 online`. I
-      fixed it in both the deploy and rollback smoke tests with a pure bash
-      substring match (`[[ "$OUTPUT" == *"5/5 online"* ]]`) — no subprocess,
-      no pipe, no race
-- [x] **Second bonus fix I found along the way, also unrelated to this
-      stage:** a manual `db:backup` test run I ran aborted immediately —
-      `mysqldump: workshop_2_prod has insufficient privileges to SHOW
-      CREATE PROCEDURE`. I checked all 4 MySQL/MariaDB hosts: **every one**
-      was missing the routine-viewing grant `docs/10-backups.md` already
-      documents needing (`SELECT ON mysql.proc` for the 2 MariaDB hosts,
-      `SHOW_ROUTINE` for the 2 MySQL 8 hosts) — present nowhere despite my
-      own doc's 2026-07-20 restore drill recording it as fixed. Most likely
-      explanation: I applied it by hand that day and never codified it into
-      the Ansible playbooks, so a later re-provisioning run reset each
-      user's privileges back to just `ALL PRIVILEGES ON workshop_2_prod.*`
-      and silently dropped it. I re-applied it on all 4 hosts.
-- [x] **Follow-up I did (2026-07-26, commit `dc34d09`):** I folded the
-      grant into the *same* managed `mysql_user` `priv` string in all 4 DB
-      playbooks (`{{ db_name }}.*:ALL/*.*:SHOW_ROUTINE` for the 2 MySQL
-      hosts, `.../mysql.proc:SELECT` for the 2 MariaDB hosts) instead of a
-      separate task — a separate task with a narrower `priv` would just
-      flip-flop against this one every other run, since `mysql_user`'s
-      default `append_privs:false` revokes anything not listed. I ran
-      `site.yml` against all 4 hosts twice live: both runs `changed=0`,
-      confirming this now survives re-provisioning instead of silently
-      reverting again
-- [x] **I fully verified this end-to-end (2026-07-26, run
-      `20260726_041712`):** I ran a manual backup that completed
-      successfully post-fix — all 5 dumps, logical FK audit, `Synced to
-      Azure Blob Storage.` printed, and I confirmed via a direct Blob List
-      Containers API call that all 6 files (`manifest.json` + 5 dumps)
-      actually landed in `backups/20260726_041712/`
-
-![backups/20260726_041712/ in the Azure portal — all 6 files present (manifest.json, mariadb-booking, mariadb-reporting, mysql-animals, mysql-shelter, pgsql-workshop2.dump), all "Available", confirming the API-based verification above](devops-plan-images/14-backup-files-in-blob.png)
-- [x] Cost check: 6 small files (compressed SQL dumps + a Postgres custom
-      dump + a JSON manifest) — negligible against my $10/month budget
-
-**The full flow, once deployed:**
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  Every night, 02:00 (already scheduled — unchanged)         │
-└───────────────────────────┬──────────────────────────────────┘
-                             ▼
-┌────────────────────────────────────────────────────────────┐
-│  app-server: Laravel scheduler fires                         │
-│  (wrapped by Vault Agent, which injects secrets into env)    │
-└───────────────────────────┬──────────────────────────────────┘
-                             ▼
-┌────────────────────────────────────────────────────────────┐
-│  Vault Agent reads secret/animal-shelter-workshop            │
-│  → injects AZURE_BACKUP_SAS_TOKEN + CONTAINER_URL             │
-│    (alongside the existing DB/Cloudinary/mail secrets)       │
-└───────────────────────────┬──────────────────────────────────┘
-                             ▼
-┌────────────────────────────────────────────────────────────┐
-│  php artisan db:backup runs                                  │
-│   1. dumps all 5 databases → storage/app/backups/<run-id>/   │
-│   2. writes manifest.json                                    │
-│   3. AzureBackupSync uploads those files                     │
-│   4. prunes old local runs (7 daily + 4 weekly)               │
-└───────────────────────────┬──────────────────────────────────┘
-                             ▼
-┌────────────────────────────────────────────────────────────┐
-│  Azure Blob container "backups" (aswbackupstaufiq)            │
-│  → offsite copy exists, independent of the Proxmox host       │
-└────────────────────────────────────────────────────────────┘
-```
-
-### Step 3 — Azure Functions (the Lambda equivalent)
-
-- [ ] Search bar → **Function App** → Create, **Consumption plan**
-- [ ] Build a small function that calls the lab's Vault API over a secure
-      tunnel and reads one of `asw_secrets`' actual fields (scoped read-only,
-      same `asw-deploy`-style AppRole discipline used everywhere else in this
-      project — never the root token)
-- [ ] Cost check: Consumption plan carries its own perpetual free grant
-      (1M executions/month) separate from the $10 budget above — a homelab
-      test function stays inside that grant easily. Only the small backing
-      Storage Account it needs draws from credit, negligibly
-
-### Step 4 — stretch: Terraform talking to a second provider
-
-- [ ] Replicate Stage 1's Terraform config using the `azurerm` provider
-      instead of `bpg/proxmox`, provisioning one small VM (`Standard_B1s` —
-      the cheapest burstable size)
-- [ ] Prove it applies and boots, then **destroy it immediately** — this is
-      the one item in Stage 8 that can meaningfully eat the $10/month budget
-      if left running, unlike Steps 2-3. Same discipline as Stage 1's own
-      test VMs: prove it once, tear it down, don't let it become a second
-      permanent environment
+**This was the last item in the entire devops-practice-plan.** All 8 stages
+are now complete.
 
 ---
 

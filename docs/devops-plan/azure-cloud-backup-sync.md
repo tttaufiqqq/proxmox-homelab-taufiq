@@ -23,6 +23,8 @@ $87.61 of $100 credit unused, expiring March 2027. Rather than let it
 lapse, I made it the offsite target — genuine hybrid-cloud exposure instead
 of a second on-prem copy sitting on the same LAN.
 
+![Azure for Students Benefits page — $87.61 of $100 credit remaining, "Always free services" tile listing Advisor, API Management, App Configuration, Azure App Service, Automation, Azure AI Bot Service, AI Immersive Reader, Azure AI Language](images/02-azure-student-benefits.png)
+
 ## What I built
 
 **Budget guardrail first, before I touched anything billable.** $87.61 over
@@ -34,6 +36,10 @@ nothing else below draws more than pennies against it, but a stretch-goal
 VM later in the same plan (Terraform → Azure) very much could if I left it
 running.
 
+![Azure Create Budget wizard, filled in — Name homelab-stage8-guardrail, Reset period Monthly, Creation date July 2026, Expiration date April 2027, Amount 10](images/04-azure-create-budget-filled.png)
+![Set alerts step — Actual cost thresholds at 50% ($5), 80% ($8), 100% ($10), alert recipient taufiq33992@gmail.com](images/05-azure-set-alerts.png)
+![Budgets list confirming it's live — homelab-stage8-guardrail, Monthly, 7/1/2026-4/30/2027, Budget $10.00, Evaluated spend $0.00, Progress 0.00%](images/06-azure-budget-list-confirmed.png)
+
 **Storage:** one Storage Account (`aswbackupstaufiq`, Standard/LRS, its own
 `homelab-stage8` resource group) with a private `backups` Blob container. I
 scoped access to a **container-scoped SAS token** — Read/Write/List/Create
@@ -43,6 +49,10 @@ rather than the full account key. I left public network access enabled
 not from inside an Azure VNet, and pinning to a home IP would break the
 sync the next time my ISP rotates it. The actual access control I'm relying
 on is the scoped credential, not the network boundary.
+
+![Storage account Basics tab — Subscription Azure for Students, Resource group (New) homelab-stage8, name aswbackupstaufiq, Region Southeast Asia, Preferred storage type Azure Blob Storage, Performance Standard, Redundancy LRS](images/10-storage-basics-tab.png)
+![Storage account Networking tab — Public network access: Enable, scope: Enable from all networks](images/07-storage-networking-tab.png)
+![Containers blade showing 2 items — auto-created $logs (private, Azure's own storage-analytics container) and the new backups container (private, Available)](images/11-storage-containers-created.png)
 
 **I reused the existing credential-delivery pipeline instead of adding a new
 one.** `secret/animal-shelter-workshop` in Vault already held 14 fields (DB
@@ -118,12 +128,16 @@ found exactly what it was looking for. I reproduced the identical command
 by hand on `app-server` right afterward and confirmed the health check
 itself was fine; the pipe was the only thing broken.
 
+![Deploy #3 failed and auto-rolled-back to 3b67355 — job summary showing the migration caveat this pipeline already documents for rollback](images/12-deploy3-failed-rollback.png)
+
 **How I recovered:** I replaced both occurrences (the deploy smoke test and
 the rollback smoke test, in
 `Animal-Shelter-Workshop/.github/workflows/deploy.yml`) with a pure bash
 substring match — `[[ "$OUTPUT" == *"5/5 online"* ]]` — no subprocess, no
 pipe, no race. I verified it by pushing again: `Deploy #4`, commit
 `b55b624`, succeeded cleanly, no rollback.
+
+![Deploy #4 succeeded — plan/deploy-app green, rollback and no-rollback-target skipped, total duration 2m 33s](images/13-deploy4-succeeded.png)
 
 ### 2. A grant fix I'd already made had silently reverted
 
@@ -173,6 +187,8 @@ audit, `Synced to Azure Blob Storage.` printed. I confirmed it independently
 two ways — a direct Blob List Containers API call, and the Azure portal —
 that all 6 files (`manifest.json` + 5 dumps) actually exist in
 `backups/20260726_041712/`.
+
+![backups/20260726_041712/ in the Azure portal — all 6 files present (manifest.json, mariadb-booking, mariadb-reporting, mysql-animals, mysql-shelter, pgsql-workshop2.dump), all "Available", confirming the API-based verification above](images/14-backup-files-in-blob.png)
 
 ## Where things live
 
