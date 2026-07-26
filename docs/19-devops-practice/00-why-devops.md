@@ -34,14 +34,14 @@ happened in.
 
 | # | Doc | Stage |
 |---|---|---|
-| 01 | Terraform: proving the base loop | Stage 1 |
-| 02 | Terraform: state backend, container import, module | Stage 1 (continued) |
-| 03 | Ansible: roles, idempotency, Molecule, fleet expansion | Stage 2 |
-| 04 | CI/CD: per-connection smoke test, pre-deploy backup, drift check | Stage 3 |
-| 05 | Docker: multi-stage build and compose | Stage 4 |
-| 06 | k3s: single-node deployment and Vault injector | Stage 5 |
-| 07 | Observability: Prometheus, Grafana, Loki, Alertmanager | Stage 6 |
-| 08 | GitOps: ArgoCD auto-sync and drift-revert | Stage 7 |
-| 09 | Azure: offsite backup sync and budget guardrail | Stage 8, Steps 1-2 |
-| 10 | Azure: Functions reading Vault through Tailscale Funnel | Stage 8, Step 3 |
-| 11 | Azure: Terraform talking to a second provider | Stage 8, Step 4 (stretch) |
+| 01 | [Terraform: proving the base loop](01-terraform-first-real-loop.md) | Stage 1 |
+| 02 | [Terraform: state backend, container import, module](02-terraform-state-import-and-module.md) | Stage 1 (continued) |
+| 03 | [Ansible: roles, idempotency, Molecule, fleet expansion](03-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md) | Stage 2 |
+| 04 | [CI/CD: per-connection smoke test, pre-deploy backup, drift check](04-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md) | Stage 3 |
+| 05 | [Docker: multi-stage build and compose](05-docker-multi-stage-build-and-compose.md) | Stage 4 |
+| 06 | [k3s: single-node deployment and Vault injector](06-k3s-single-node-deployment-and-vault-injector.md) | Stage 5 |
+| 07 | [Observability: Prometheus, Grafana, Loki, Alertmanager](07-observability-prometheus-grafana-loki-alertmanager.md) | Stage 6 |
+| 08 | [GitOps: ArgoCD auto-sync and drift-revert](08-gitops-argocd-auto-sync-and-drift-revert.md) | Stage 7 |
+| 09 | [Azure: offsite backup sync and budget guardrail](09-azure-cloud-backup-sync.md) | Stage 8, Steps 1-2 |
+| 10 | [Azure: Functions reading Vault through Tailscale Funnel](10-azure-functions-vault-tailscale-funnel.md) | Stage 8, Step 3 |
+| 11 | [Azure: Terraform talking to a second provider](11-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
