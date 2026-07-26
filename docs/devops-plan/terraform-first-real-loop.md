@@ -258,6 +258,13 @@ terraform apply
   `php artisan test --env=testing --testsuite=Unit,Feature,Procedures`.
   **363 tests passed, 794 assertions, 0 failures.** Pushed only after
   that came back clean.
+- After pushing, `Tests` → `deploy.yml` ran for real against production
+  (`Deploy #9`, commit `c0551c6`) — `plan`, `deploy-db`, and `deploy-app`
+  all succeeded, `rollback`/`no-rollback-target` correctly skipped, total
+  duration 5m22s. Confirms the fixes are safe against the real fleet, not
+  just the test VMs.
+
+![GitHub Actions Deploy #9 run — plan, deploy-db, and deploy-app all green, rollback and no-rollback-target correctly skipped, Success, 5m22s total, commit c0551c6](images/stage1-deploy-9-success.png)
 
 ## Where things live
 
