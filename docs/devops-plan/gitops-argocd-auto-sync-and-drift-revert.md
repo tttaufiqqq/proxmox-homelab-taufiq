@@ -236,14 +236,16 @@ everything verified via `kubectl` above holds up in the GUI too: the
 at the right repo/branch/path, `Last Sync` timestamp matching the
 drift-revert test from section 4.
 
-![ArgoCD Application Details Tree for animal-shelter-workshop — APP HEALTH Healthy, SYNC STATUS Synced to main (cd53331), LAST SYNC Sync OK to cd53331 succeeded 25 minutes ago, author tttaufiqqq, comment "feat(k8s): Stage 7 GitOps sync test - bump ...". Resource tree: animal-shelter-workshop app fans out to asw-app-config (cm), asw-nginx-config (cm), asw-app-secret (secret), asw-app (svc), and asw-app (deploy, rev:2), which fans out to two ReplicaSets asw-app-c7857ccf8 (rev:2, current) and asw-app-794dcdd558 (rev:1, old) — all nodes green/healthy](images/stage7-argocd-application-resource-tree.png)
+![ArgoCD Application Details Tree for animal-shelter-workshop — APP HEALTH Healthy, SYNC STATUS Synced to main (cd53331), LAST SYNC Sync OK to cd53331 succeeded 29 minutes ago, author tttaufiqqq, comment "feat(k8s): Stage 7 GitOps sync test - bump asw-app to 3 replicas". Sync status counts in the left sidebar: 5 Synced, 0 OutOfSync, 7 Healthy. Full resource tree, expanded to Pod level: animal-shelter-workshop fans out to asw-app-config (cm), asw-nginx-config (cm), asw-app-secret (secret), asw-app (svc), and asw-app (deploy, rev:2) — the Deployment fans out to two ReplicaSets, asw-app-c7857ccf8 (rev:2, current) and asw-app-794dcdd558 (rev:1, old, 0 pods); the current ReplicaSet fans out to all 3 live Pods (asw-app-c7857ccf8-4kmtw, -8h7t5, -569rj), each 2/2 running — the exact 3 Pods from the replica-bump test in section 3, all green](images/stage7-argocd-application-resource-tree.png)
 
-The `Application` detail resource-tree view — every managed object
-(`ConfigMap`s, `Secret`, `Service`, `Deployment`, both `ReplicaSet`
-revisions from the replica-bump in section 3) shown individually,
-each green, confirming ArgoCD is tracking the full object graph, not just
-reporting an aggregate status. `LAST SYNC` here matches the same
-`cd53331` commit and timestamp as the card view above.
+The `Application` detail resource-tree view, expanded all the way down to
+individual Pods — every managed object (`ConfigMap`s, `Secret`, `Service`,
+`Deployment`, both `ReplicaSet` revisions, and all 3 live `Pod`s from the
+replica-bump in section 3) shown individually, each green, confirming
+ArgoCD is tracking the full object graph down to the Pod level, not just
+reporting an aggregate status. The sidebar's own counts (5 Synced / 0
+OutOfSync, 7 Healthy) corroborate the same picture. `LAST SYNC` here
+matches the same `cd53331` commit and timestamp as the card view above.
 
 Still worth adding next session:
 - The sync history / timeline view showing the auto-sync and self-heal
