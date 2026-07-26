@@ -414,7 +414,7 @@ Not started yet, tracked here as it happens, same table shape as
 | `linux-sql-server` | Done, colors verified. Powered on, customized, powered back off (original state restored). |
 | `spring-boot-app` | Done, colors verified. Powered on, customized, powered back off (needed a longer shutdown timeout, see Notes). |
 | `linux-oracle-db` | Done, colors verified. Powered on, customized (binary copied from `linux-vault` over Tailscale, see Notes), powered back off. |
-| `taufiq` | Pending (host node, own section above) |
+| `taufiq` | Done, colors verified. Confirmed scripted SSH stays clean and `PROMPT_COMMAND` is only set (`_omp_hook`) in a real interactive shell. |
 
 ## Notes (rollout findings so far)
 
