@@ -29,6 +29,79 @@ previous one was fixed. That's the real finding of this stage — not any
 one bug, but that a plan built by reading code instead of running it can
 look completely done and still never have worked once.
 
+## Where I started
+
+The plan going in, before any of this was attempted — eight steps, one
+known blocker:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    STAGE 1 GOAL: Prove Terraform loop                │
+│         "Can we spin up a working app server from scratch?"          │
+└─────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────┐
+  │ 0. Check room │  ssh proxmox "free -h"
+  │  on the host  │  (only ~1.1 GiB free last check — may need to
+  └──────┬────────┘   bring VMs up one at a time)
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 1. FIX THE BLOCKER    │  Terraform's cloud-init only makes a
+  │  (do this first!)     │  "workshop" user, but Ansible expects
+  │  add "taufiq" user    │  a "taufiq" user to already exist.
+  └──────┬────────────────┘  → add to cloud-init.yml.tftpl, OR
+         │                     → add an Ansible bootstrap task
+         ▼
+  ┌──────────────────────┐
+  │ 2. terraform init     │
+  │    terraform plan     │  review before touching anything real
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 3. terraform apply    │  creates VMs 201/204/205/206
+  │                        │  (test VMs — NOT prod 101/104/105/106)
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 4. VMs join Tailscale │
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 5. ansible-playbook   │  deploy the app onto the fresh VMs
+  │    site.yml            │
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 6. PROVE IT WORKS     │  curl the app, check migrate:status
+  │                        │  — not just "packages installed"
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 7. Decide & document  │  tear VMs down (recommended) OR keep
+  │                        │  as second env — either is fine, just
+  │                        │  choose deliberately
+  └──────┬────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │ 8. Write it up        │  update devops-practice-plan.md's
+  │                        │  Stage 1 checklist, Stage-8-style
+  └────────────────────────┘
+```
+
+Steps 0, 2-6 (minus the one known blocker in step 1) all looked like they
+should just work — the code was already written and partially bug-fixed on
+paper. In practice, step 3 alone (`terraform apply`) surfaced 4 of the 9
+things below before a single VM even finished booting, and step 5
+(`ansible-playbook`) surfaced 3 more. The "prove it works" step at the end
+is exactly where this plan and reality diverged hardest — see below.
+
 ## What I built / fixed
 
 Working through the loop end-to-end, in the order each blocker appeared:
