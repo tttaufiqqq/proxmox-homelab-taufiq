@@ -608,7 +608,7 @@ plain scripted command does not.
 
 **Scope:** Reference diagrams for the network segmentation work in
 [`docs/18-network-segmentation/network-segmentation-execution.md`](../18-network-segmentation/network-segmentation-execution.md)
-and `homelab-network-segmentation-execution-plan.md` (repo root) — included
+and `homelab-network-segmentation-execution-plan.md` (`plans/`) — included
 here alongside the fastfetch addendum above as a snapshot of the fleet's
 current network layout. Also saved standalone as
 `vlan-subnet-diagram.txt` in Downloads.

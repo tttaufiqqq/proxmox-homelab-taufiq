@@ -1,3 +1,10 @@
 # JetBrains IDE (PhpStorm/DataGrip) project files — local editor state, not docs
 .idea/
 *.iml
+
+# Session handoff notes — local working memory between Claude Code sessions,
+# never meant for GitHub
+handoff.md
+
+# Claude Code project instructions — local-only, never pushed to GitHub
+CLAUDE.md
