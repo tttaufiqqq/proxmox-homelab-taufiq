@@ -359,6 +359,62 @@ if a Vault Kubernetes-auth login ever returns a bare 403 with no further
 detail again, the log-level-bump-then-check-journalctl move is the way to
 actually see why.
 
+## Bonus: hardening — proving the CT survives a real shutdown/reboot, not assuming it
+
+Every fix made earlier in this stage happened to land in a persistent
+place rather than a one-off runtime command, so in theory none of it
+should need redoing after a CT stop/start or a Proxmox host reboot. Rather
+than assume that, checked each piece explicitly and then actually
+shut the CT down and brought it back cold:
+
+- **`onboot: 1`** already set on CT 100 at creation time — survives a
+  `proxmox` host reboot without a manual `pct start`.
+- **`k3s` and `tailscaled` are both `systemctl enable`d**, not just
+  `--now`-started — `systemctl is-enabled k3s tailscaled` returns
+  `enabled` for both, so they start on their own after the CT boots, no
+  human needed.
+- **The `KubeletInUserNamespace` fix is baked directly into
+  `/etc/systemd/system/k3s.service`'s own `ExecStart=` line** (a static
+  file on the CT's disk), not something set only for the process that was
+  running at install time — confirmed by reading the file back.
+- **The `tls-san` fix lives in `/etc/rancher/k3s/config.yaml`**, a real
+  file k3s reads on every startup, not a flag that only applied to one
+  invocation.
+- **The `/dev/net/tun` passthrough and cgroup device allow lines live in
+  Proxmox's own `/etc/pve/lxc/100.conf`** (host-side), reapplied by
+  Proxmox itself every time the CT starts, regardless of why it stopped.
+- **`tun` turned out to be compiled directly into this host's kernel**
+  (`CONFIG_TUN=y`), not a loadable module — so there's no
+  module-not-loaded-yet race to worry about on a fresh host boot either.
+
+Then did the actual test instead of trusting the above list on its own:
+```
+pct shutdown 100 --timeout 30    # clean stop
+pct start 100                    # cold start, no manual fixes applied
+```
+25 seconds after `pct start`, with zero intervention:
+```
+kubectl get nodes
+# linux-k3s   Ready   control-plane   ...
+
+tailscale status --json | grep BackendState
+# "BackendState": "Running"          <- reconnected, no re-auth needed
+
+kubectl get pods -A
+# every Pod back to Running (RESTARTS incremented by 1-2 — the
+# containers inside each Pod restarted in place; the Pods themselves
+# were never recreated, since the k3s datastore lives on the CT's own
+# disk and survived the stop/start cycle unchanged)
+
+curl http://localhost:30080/up
+# HTTP 200
+```
+No fixes were needed to make this work — it already worked, because the
+earlier fixes were written to disk instead of applied only in-memory.
+This is the actual meaning of "hardened" here: not new configuration, but
+confirmation that nothing in this stage is secretly depending on a
+runtime state that a shutdown would wipe out.
+
 ## How to independently verify each item
 
 **1-2. k3s CT + single-node cluster**
@@ -405,6 +461,16 @@ kubectl get pod t   # Pending
 kubectl taint nodes linux-k3s demo=busy-
 kubectl drain linux-k3s --ignore-daemonsets --delete-emptydir-data --force
 kubectl uncordon linux-k3s
+```
+
+**Bonus: shutdown/reboot hardening**
+```bash
+ssh proxmox "pct shutdown 100 --timeout 30 && pct start 100"
+# wait ~25s, then:
+ssh proxmox "pct exec 100 -- kubectl get nodes"          # Ready
+ssh proxmox "pct exec 100 -- tailscale status --json"    # BackendState: Running
+ssh proxmox "pct exec 100 -- kubectl get pods -A"         # all Running
+ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://localhost:30080/up"  # 200
 ```
 
 ## What carries forward to Stage 6/7 — and what doesn't
