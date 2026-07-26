@@ -406,14 +406,14 @@ Not started yet, tracked here as it happens, same table shape as
 | `linux-mysql-2` | Done, colors verified programmatically (Phase 1, autonomous) |
 | `linux-mariadb-2` | Done, colors verified programmatically (Phase 1, autonomous) |
 | `linux-observability` | Done, colors verified programmatically (Phase 1, autonomous) |
-| `linux-app-server` | Pending (Phase 2) |
-| `linux-sql-server` | Pending (Phase 2) |
-| `spring-boot-app` | Pending (Phase 2) |
-| `linux-mysql` | Pending (Phase 2) |
-| `linux-mariadb` | Pending (Phase 2) |
-| `linux-postgres` | Pending (Phase 2) |
-| `linux-oracle-db` | Pending (Phase 2) |
-| `linux-mini-io` | Pending (Phase 2) |
+| `linux-app-server` | Done, colors verified programmatically. Was already running by the time Phase 2 started (see Notes item 7), no power cycle needed. |
+| `linux-mysql` | Done, colors verified programmatically. Was already running (see Notes item 7). |
+| `linux-mariadb` | Done, colors verified programmatically. Was already running (see Notes item 7). |
+| `linux-postgres` | Done, colors verified programmatically. Was already running (see Notes item 7). |
+| `linux-mini-io` | Done, colors verified programmatically. Was already running (see Notes item 7). |
+| `linux-sql-server` | Pending, still off, needs power on/customize/power off |
+| `spring-boot-app` | Pending, still off, needs power on/customize/power off |
+| `linux-oracle-db` | Pending, still off, needs power on/customize/power off |
 | `taufiq` | Pending (host node, own section above) |
 
 ## Notes (rollout findings so far)
@@ -483,3 +483,20 @@ Not started yet, tracked here as it happens, same table shape as
    go through Windows' NRPT policy the way normal applications (including
    `ssh`) do, so it looked unfixed when it actually wasn't. Confirmed the
    real fix worked by testing with `ssh` itself, not `nslookup`.
+7. **By the time Phase 2 started, the actual Proxmox power state no longer
+   matched the plan's snapshot** — `qm list` showed `linux-app-server`,
+   `linux-mysql`, `linux-mariadb`, `linux-postgres`, and `linux-mini-io` all
+   already running, not off like in the original screenshot (only
+   `linux-sql-server`, `spring-boot-app`, and `linux-oracle-db` were still
+   actually off). Rather than force the original power-cycle plan onto
+   hosts that were already up, customized those 5 directly with no power
+   change, and kept the power-on/customize/power-off cycle for the 3 still
+   genuinely off. All 7 Phase 1 hosts were left running throughout, no
+   shutdown needed after all.
+8. **`linux-postgres`'s first oh-my-posh binary download timed out**
+   (`curl` exit 28), but a retry immediately after succeeded in well under
+   a second, and every diagnostic (DNS, TLS handshake to `github.com`, the
+   redirect chain to `release-assets.githubusercontent.com`) came back
+   clean. Concluded it was a one-off transient hiccup, not an OPNsense
+   block or a host-specific network gap like `linux-vault`/`linux-oracle-db`
+   had during the MOTD rollout, no lasting fix needed.
