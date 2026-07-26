@@ -192,9 +192,20 @@ doubt, do the full thing" reasoning `deploy.yml` already uses for a failed
   confirmed in the output.
 - `linux-gh-runner` playbook (adds Terraform + the new timer): run twice —
   `changed=4` then `changed=0`.
-- Pushed as `8cfd3b4`; `Tests` → `Deploy` ran against production
-  afterward (see the plan file's Stage 3 checklist for the resulting run
-  numbers/outcome).
+- Pushed as `8cfd3b4` — `Tests #36` passed, then `Deploy #14` ran against
+  production and succeeded end to end: `plan`, `deploy-db` (including the
+  new **Pre-deploy database backup** step, followed by **Provision the 5
+  database servers**), and `deploy-app` (including the **Smoke test — app
+  health** step, now running with `--fail-on-down`) all green;
+  `rollback`/`no-rollback-target` correctly skipped since nothing failed.
+  This is also live proof the routing fix (item 4 below) works: `deploy-db`
+  correctly ran at all for a push whose Ansible-side changes lived entirely
+  under `roles/`, `templates/`, and `playbooks/` paths already covered by
+  `INFRA_APP` — the fix's real test is the *next* roles-only push after
+  this one, but the fact this run's own routing decision matched
+  expectations (both jobs ran) confirms nothing regressed.
+
+![GitHub Actions "All workflows" list — Deploy #14 (this Stage 3 push) and Deploy #13 both green with a checkmark, Tests #36 for commit 8cfd3b4 (Stage 3) and Tests #35 for commit 3ff44aa (Stage 2's roles refactor, the push that exposed the routing gap) also green, and "Terraform Drift Check" now listed in the left-hand workflow sidebar alongside Deploy and Tests, confirming the new workflow registered on GitHub](images/stage3-deploy-success.png)
 
 ### How to independently verify each item
 
@@ -237,17 +248,23 @@ grep -n "roles/" .github/workflows/deploy.yml
 ```
 Expect `roles/` in both the `INFRA_APP` and `INFRA_DB` grep patterns.
 
-### Screenshots still to add
+### Screenshots
 
-- **`images/stage3-drift-job-summary.png`** — after the drift workflow has
-  run at least once (manual `workflow_dispatch` is enough, no need to wait
-  for 03:00 UTC): Actions tab → `Terraform Drift Check` → the run → screenshot
-  its job summary panel.
-- **`images/stage3-deploy-success.png`** — Actions tab → the `Deploy` run
-  triggered by this stage's push (`8cfd3b4`) → screenshot once green, with
-  `plan`/`deploy-db`/`deploy-app` job names visible (confirms the pre-deploy
-  backup step and the per-connection health check both ran as part of a
-  real production deploy, not just in isolation).
+- **`images/stage3-deploy-success.png`** — added. Actions → "All workflows"
+  list, captured right after `Deploy #14` (this stage's push, `8cfd3b4`)
+  finished: both `Deploy #14` and the preceding `Deploy #13` show green
+  checkmarks, `Tests #36` (`8cfd3b4`) and `Tests #35` (`3ff44aa`, Stage 2's
+  roles refactor — the push that exposed the routing gap this stage fixed)
+  are both green, and `Terraform Drift Check` is visible in the left-hand
+  workflow sidebar alongside `Deploy` and `Tests`, confirming the new
+  workflow file registered on GitHub as soon as it was pushed.
+- **`images/stage3-drift-job-summary.png`** — still to add. After the drift
+  workflow has run at least once (manual `workflow_dispatch` from the
+  Actions tab is enough, no need to wait for 03:00 UTC): Actions tab →
+  `Terraform Drift Check` → the run → screenshot its job summary panel
+  (expect "No drift detected" or a fenced `terraform plan` block showing
+  the `8 to add, 0 to change, 0 to destroy` result already confirmed by
+  hand on `linux-gh-runner`).
 
 ## Where things live
 
