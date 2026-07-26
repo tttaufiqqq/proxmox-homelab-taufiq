@@ -400,12 +400,12 @@ Not started yet, tracked here as it happens, same table shape as
 | Host | Status |
 |---|---|
 | `linux-k3s` | Done, approved by live SSH check |
-| `linux-mongodb` | Deployed, awaiting your SSH verification (Phase 1, host 2). Needed a `tailscaled` restart first, see Notes. |
-| `linux-vault` | Pending (Phase 1, autonomous) |
-| `linux-gh-runner` | Pending (Phase 1, autonomous) |
-| `linux-mysql-2` | Pending (Phase 1, autonomous) |
-| `linux-mariadb-2` | Pending (Phase 1, autonomous) |
-| `linux-observability` | Pending (Phase 1, autonomous) |
+| `linux-mongodb` | Done, approved by live SSH check. Needed a `tailscaled` restart first, see Notes. |
+| `linux-vault` | Done, colors verified programmatically (Phase 1, autonomous) |
+| `linux-gh-runner` | Done, colors verified programmatically (Phase 1, autonomous) |
+| `linux-mysql-2` | Done, colors verified programmatically (Phase 1, autonomous) |
+| `linux-mariadb-2` | Done, colors verified programmatically (Phase 1, autonomous) |
+| `linux-observability` | Done, colors verified programmatically (Phase 1, autonomous) |
 | `linux-app-server` | Pending (Phase 2) |
 | `linux-sql-server` | Pending (Phase 2) |
 | `spring-boot-app` | Pending (Phase 2) |
@@ -449,3 +449,37 @@ Not started yet, tracked here as it happens, same table shape as
    `tailscaled` specifically on that container. Fixed with
    `pct exec 108 -- systemctl restart tailscaled` from the Proxmox host,
    SSH worked immediately after.
+4. **The first oh-my-posh theme file I wrote for `linux-mongodb` had
+   silently empty `leading_diamond`/`trailing_diamond` fields** even though
+   I intended the same rounded-cap glyphs as `linux-k3s`. Manually retyping
+   the JSON in a fresh file lost the invisible Unicode characters; `cat -A`
+   showed `linux-k3s`'s file correctly had `M-nM-^BM-6`/`M-nM-^BM-4`
+   (U+E0B6/U+E0B4) while `linux-mongodb`'s had nothing between the quotes.
+   Fixed it, and avoided repeating the mistake for every other host, by
+   generating each host's file from a byte-exact copy of the known-good
+   `linux-k3s` file via `sed`, substituting only the accent color hex,
+   never retyping the JSON by hand again.
+5. **`linux-k3s` and `linux-observability` had no custom SSH MOTD banner at
+   all** (plain stock Ubuntu welcome message, not the figlet/role/stats
+   banner from `docs/17-custom-ssh-motd`), since both postdate that
+   rollout's original 13-host fleet. Extended the shared `99-custom` script
+   with a case entry for each: `linux-k3s` (role "K3s (Kubernetes) Server",
+   accent 63) and `linux-observability` (role "Observability Stack
+   (Prometheus/Grafana/Loki)", accent 37, checking `prometheus`,
+   `grafana-server`, and `loki`). Neither host had passwordless sudo either
+   (needed for `apt install figlet` and writing to `/etc/update-motd.d/`),
+   fixed by adding an `/etc/sudoers.d/<user>` NOPASSWD entry for each,
+   done by the user directly rather than over a non-interactive session.
+   Verified both by triggering a real login and reading `/run/motd.dynamic`
+   directly, not just running the script by hand. Spot-checked the
+   remaining active Phase 1 hosts (`linux-vault`, `linux-gh-runner`,
+   `linux-mysql-2`, `linux-mariadb-2`) still had their existing MOTD script
+   intact, unaffected by any of this.
+6. **This Windows client's `*.taufiq.lab` DNS quirk (item 2 above) also
+   affected the user's own terminal, not just this agent's SSH calls** —
+   `ssh linux-observability` failed to resolve for the user directly.
+   `nslookup` kept reporting failure even after the `tailscale set
+   --accept-dns` toggle, which was misleading: `nslookup` doesn't reliably
+   go through Windows' NRPT policy the way normal applications (including
+   `ssh`) do, so it looked unfixed when it actually wasn't. Confirmed the
+   real fix worked by testing with `ssh` itself, not `nslookup`.
