@@ -23,7 +23,7 @@ Proxmox node and a managed switch later, without needing a redesign.
 | 50 | *(reserved)* Ceph | `10.0.50.0/24` | Not used yet — for Ceph storage replication once I add node 2 |
 | 60 | *(reserved)* DMZ | `10.0.60.0/24` | Not used yet — for any future public-facing service besides Spring Boot |
 | 70 | *(reserved)* Media / Personal services | `10.0.70.0/24` | Not used yet — for Jellyfin or similar self-hosted apps |
-| 80 | *(reserved)* Observability | `10.0.80.0/24` | Not used yet — for Prometheus/Grafana/Loki when I build that out |
+| 80 | **Active** — Observability | `10.0.80.0/24` | `linux-observability` (CT 114) — Prometheus/Grafana/Loki/Alertmanager, see Stage 6 |
 | 999 | Native / dead-end | *(no subnet, no devices ever)* | Trunk port native VLAN — deliberately empty |
 
 I numbered these 10/20/30 instead of 1/2/3 on purpose, so I can slot a new VLAN
@@ -352,9 +352,11 @@ LAN segmentation.
 - **The OPNsense router VM is a single point of failure.** If it goes down,
   no VLAN can reach any other VLAN. Accepted for now, revisit with a
   redundant router pair once a second physical node exists.
-- **VLANs 50, 60, 70, 80 are reserved but empty.** No devices, no traffic,
-  intentionally kept unused until Ceph, a second public-facing service, media
-  apps, or the observability stack actually get built.
+- **VLANs 50, 60, 70 are reserved but empty.** No devices, no traffic,
+  intentionally kept unused until Ceph, a second public-facing service, or
+  media apps actually get built. **VLAN 80 activated** during Stage 6
+  (Observability) — see `docs/18-network-segmentation/network-segmentation-execution.md`'s
+  VLAN 80 section.
 - **`linux-gh-runner`'s CD reach is a deliberate hole in default-deny.** It's
   allowed SSH to every VLAN so Ansible can converge the fleet — scoped to one
   host and one port, but still an exception to "nothing crosses VLANs
