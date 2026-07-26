@@ -298,6 +298,77 @@ the plain `curl | bash` install should just work.
 Not a full-fleet push, staged based on the current Proxmox power state
 snapshot (Datacenter > taufiq server view):
 
+```
+┌──────────────────────────────────────────────┐
+│  OH-MY-POSH FLEET ROLLOUT — EXECUTION FLOW    │▏
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ PHASE 1 — currently ACTIVE hosts (7)          │▏  k3s, mongodb, vault, gh-runner,
+│                                                │▏  mysql-2, mariadb-2, observability
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 1 — customize Active Host #1 (k3s)       │▏  install oh-my-posh, deploy this
+│                                                │▏  host's theme.omp.json, wire .bashrc
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ STOP — you SSH in and check the prompt        │▏  I wait here, no further action
+└──────────────────────────────────────────────┘▔▔
+                     │  (you approve)
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 2 — customize Active Host #2 (mongodb)   │▏  same install/deploy steps
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ STOP — you SSH in and check the prompt        │▏  second confirmation
+└──────────────────────────────────────────────┘▔▔
+                     │  (you approve both)
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 3 — remaining 5 active hosts             │▏  no more pauses, I proceed
+│           customized autonomously             │▏  host-by-host on my own
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ PHASE 2 — currently OFF hosts (8)             │▏  app-server, sql-server, spring-
+│                                                │▏  boot-app, mysql, mariadb, postgres,
+│                                                │▏  oracle-db, mini-io
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ ⚠ CONFIRM — shut down all Phase 1 hosts       │▏  frees RAM for Phase 2, this is
+│   (now customized and already approved)       │▏  a power-state change, ask first
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 4 — power on + customize each off-host,  │▏  one at a time; no per-host SSH
+│           one at a time                       │▏  verification (already approved)
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 5 — power that host back down again      │▏  restores it to the "off" state
+│           once customization is confirmed      │▏  it had in the image, matches
+│           applied                              │▏  the MOTD rollout precedent
+└──────────────────────────────────────────────┘▔▔
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│ Step 6 — power Phase 1 hosts back on          │▏  restores the original active/
+│           once all of Phase 2 is done         │▏  inactive split from the image
+└──────────────────────────────────────────────┘▔▔
+```
+
 **Phase 1, currently active hosts, in this order:** `linux-k3s`,
 `linux-mongodb`, `linux-vault`, `linux-gh-runner`, `linux-mysql-2`,
 `linux-mariadb-2`, `linux-observability`.
@@ -328,8 +399,8 @@ Not started yet, tracked here as it happens, same table shape as
 
 | Host | Status |
 |---|---|
-| `linux-k3s` | Pending (Phase 1, host 1, awaiting SSH verification) |
-| `linux-mongodb` | Pending (Phase 1, host 2, awaiting SSH verification) |
+| `linux-k3s` | Done, approved by live SSH check |
+| `linux-mongodb` | Deployed, awaiting your SSH verification (Phase 1, host 2). Needed a `tailscaled` restart first, see Notes. |
 | `linux-vault` | Pending (Phase 1, autonomous) |
 | `linux-gh-runner` | Pending (Phase 1, autonomous) |
 | `linux-mysql-2` | Pending (Phase 1, autonomous) |
@@ -344,3 +415,37 @@ Not started yet, tracked here as it happens, same table shape as
 | `linux-oracle-db` | Pending (Phase 2) |
 | `linux-mini-io` | Pending (Phase 2) |
 | `taufiq` | Pending (host node, own section above) |
+
+## Notes (rollout findings so far)
+
+1. **Neither `linux-k3s` nor `linux-mongodb` had passwordless sudo, and
+   `unzip` (required by oh-my-posh's official `install.sh`) wasn't
+   installed on either.** Rather than block on a sudo password, I skip the
+   installer script entirely and pull the plain Linux binary directly from
+   GitHub releases (`posh-linux-amd64`) into `~/.local/bin/oh-my-posh`, no
+   root and no `unzip` needed. Using this method for the rest of the fleet
+   too unless a host turns out to already have passwordless sudo.
+2. **This Windows client can't resolve `*.taufiq.lab` hostnames right now**
+   (`ssh linux-k3s` fails with "Could not resolve hostname"), same
+   Tailscale/NRPT DNS quirk already documented in
+   `docs/17-custom-ssh-motd` Notes item 7. Worked around it during this
+   rollout by connecting directly via each host's Tailscale IP with
+   `-F /dev/null` to bypass `~/.ssh/config`'s `HostName` override (which
+   otherwise re-triggers the same broken DNS lookup even when connecting
+   by IP, since the config matches on the IP and rewrites the target back
+   to the hostname). Normal `ssh <alias>` should still work once the
+   client-side DNS routing is fixed the same way as before
+   (`tailscale set --accept-dns=false` then `--accept-dns=true`).
+3. **`linux-mongodb` was completely unreachable over SSH** (TCP port 22
+   timed out, no SYN-ACK, nothing logged in the container's `auth.log`)
+   even though Tailscale reported it "active" with a recent handshake.
+   Ruled out an OPNsense/VLAN-wide block first, by confirming two other
+   active VLAN 20 (database tier) hosts, `linux-mysql-2` and
+   `linux-mariadb-2`, were reachable fine the whole time. `sshd` and `ufw`
+   inside the container both looked correctly configured
+   (`22/tcp ALLOW Anywhere`, sshd listening on `0.0.0.0:22`), and
+   `tailscale ping` succeeded via DERP relay, but `RxBytes` on this
+   client's peer entry for it was almost zero, pointing at a stuck
+   `tailscaled` specifically on that container. Fixed with
+   `pct exec 108 -- systemctl restart tailscaled` from the Proxmox host,
+   SSH worked immediately after.
