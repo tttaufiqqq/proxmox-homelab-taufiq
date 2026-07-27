@@ -162,6 +162,20 @@ finishing a real gap, not tidying up something that already works:
       containers (byte-identical `pct config` before/after); `locals { vms
       }` extracted into `modules/proxmox-vm/`. Full story:
       `docs/19-devops-practice/02-terraform-state-import-and-module.md`
+- [x] **Extended further, 2026-07-28**: the two CTs above were only part of
+      the live fleet — `app-server` and the other 3 original DB VMs, plus
+      every CT built by hand since (`linux-k3s`, `linux-mongodb`,
+      `linux-vault`, `linux-gh-runner`, `linux-observability`), were still
+      fully manual. All 10 of those real hosts are now adopted into
+      Terraform too, same zero-drift-first discipline (a scratch CT and a
+      scratch VM, never real hosts, used to prove the pattern first),
+      confirmed via `qm config`/`pct config` byte-identical before/after on
+      every one. Deliberately still excluded: `opnsense` (the network's
+      actual gateway) and the stopped legacy VMs. Only Ansible-level
+      management (Stage 2, below) still needs a from-scratch VM to actually
+      create a machine end-to-end without any GUI step at all — Terraform
+      itself now manages every real machine that's supposed to be managed.
+      Full story: `docs/19-devops-practice/12-terraform-full-fleet-import.md`
 
 **Capacity note:** `vms.tf` configures all 4 test VMs at 2048 MB each — booting
 them all at once is another ~8 GB on top of the ~17.9 GB already allocated to
