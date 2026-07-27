@@ -1,0 +1,5 @@
+proxmox_endpoint     = "https://100.97.8.93:8006"   # Proxmox Tailscale IP
+proxmox_api_token    = "root@pam!ansible=<uuid>"
+proxmox_ssh_user     = "root"
+proxmox_ssh_password = "<proxmox root password>"
+proxmox_node         = "taufiq"                      # node name from Proxmox UI top-left
