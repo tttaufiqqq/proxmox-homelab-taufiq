@@ -166,6 +166,38 @@ untouched. Fixed for this run with
 JSON, not a bare `-e var=true` string — this Ansible version rejects a
 string result in a `when:` boolean context).
 
+**PowerShell mangles an unquoted `-target` value that contains a dot.**
+Running these same `terraform apply -target=...` commands from PowerShell
+(rather than this session's WSL/bash) failed in two different ways before
+landing on the fix. `-target=module.vm` errored `Invalid target "module" /
+Prefix "module." must be followed by a module name"` — `Get-History`
+confirmed PowerShell had recorded the full, correct text, so this wasn't a
+typing or autocomplete problem; something in how PowerShell serializes an
+unquoted native-command argument containing a `.` was truncating it before
+`terraform.exe` ever saw it. Same failure on
+`-target=proxmox_virtual_environment_container.test_mysql_2`, this time
+also throwing "Too many command line arguments." **The fix: wrap the
+entire target value in double quotes** — `-target="module.vm"`,
+`-target="proxmox_virtual_environment_container.test_mysql_2"` — which
+resolved it completely. Bash/WSL never hit this at all; it's specific to
+invoking `terraform.exe` from PowerShell.
+
+**An interrupted `apply` left two real, untracked containers, and revealed
+a genuinely un-fixable-by-updating attribute.** Force-cancelling (Ctrl+C
+twice) an `apply` mid-flight left `test-mysql-2`/`test-mariadb-2` fully
+created and running on Proxmox, but never written to Terraform's state —
+a real orphan. `terraform import` brought them back in cleanly, but the
+very next `plan` wanted to destroy and recreate both anyway:
+`initialization.user_account` (the SSH key block) showed
+`# forces replacement`. Unlike every other unreadable attribute in this
+project so far (`operating_system`, `disk.file_format`), this one can't
+just be re-applied to converge — Proxmox has no API to change a
+container's `user_account` after creation, only at creation time, so any
+diff on it is unresolvable in place. Fixed the same way as the others
+regardless: `initialization[0].user_account` added to
+`lifecycle.ignore_changes`, confirmed `pct config` byte-identical
+afterward.
+
 **The one deliberate stopping point, not a bug:** `app-server.yml` fails
 at "Deploy .env from template" because `app_domain`/`certbot_email` are
 undefined — correct behavior, since those variables gate a real certbot
@@ -205,9 +237,11 @@ since offline hosts stay listed too — then handing off to
 yet**, per the call to document the plan first and build it later. Its
 shape, once built:
 
-1. `terraform apply -target=<the 4 VMs>` — separate from stage 2, since
-   combining them is what caused the lock timeout.
-2. `terraform apply -target=<the 2 CTs>`.
+1. `terraform apply -auto-approve -target="module.vm"` — separate from
+   stage 2, since combining them is what caused the lock timeout. The
+   target value must be double-quoted if this ever runs from PowerShell
+   (see the PowerShell quoting bug above) — bash/WSL doesn't need it.
+2. `terraform apply -auto-approve -target="proxmox_virtual_environment_container.test_mysql_2" -target="proxmox_virtual_environment_container.test_mariadb_2"`.
 3. TUN device fix + reboot for each CT, idempotent (guarded with `grep -q`
    before appending, safe to re-run).
 4. Install + join Tailscale on each CT via `pct exec` (no network path
