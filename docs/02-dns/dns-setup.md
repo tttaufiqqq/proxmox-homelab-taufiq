@@ -23,6 +23,7 @@
 13. [Reference — All IPs and Names](#13-reference--all-ips-and-names)
 14. [SSH Alias Coverage — 24 July 2026](#14-ssh-alias-coverage--24-july-2026)
 15. [Coverage Audit — 26 July 2026 (Stage 6)](#15-coverage-audit--26-july-2026-stage-6-observability)
+16. [SSH Config Hardened to Static IPs — 28 July 2026](#16-ssh-config-hardened-to-static-ips--28-july-2026)
 
 ---
 
@@ -807,7 +808,12 @@ log-queries
 log-facility=/var/log/dnsmasq.log
 ```
 
-### C:\Users\taufi\.ssh\config (Final Version)
+### C:\Users\taufi\.ssh\config (superseded — see §16)
+
+This was the config from 2 July through 26 July 2026, every `HostName` pointing at its
+`.taufiq.lab` DNS name. **As of 28 July 2026, every `HostName` below (except `app-server`)
+points directly at its Tailscale IP instead — see §16 for why and the current full file.**
+Kept here for history, not current:
 
 ```
 Host *.taufiq.lab
@@ -1390,9 +1396,58 @@ its own web GUI or SSH tunnel, not a fleet SSH alias) and
 
 ---
 
+## 16. SSH Config Hardened to Static IPs — 28 July 2026
+
+### What I Built
+
+Every `Host` block in `~/.ssh/config` now points `HostName` directly at its Tailscale IP
+instead of its `.taufiq.lab` DNS name. One exception: `app-server` has no confirmed static IP
+recorded in this config distinct from `linux-app-server` (a possibly-separate alias for the
+same VM 101, per §15's finding that VM 101 answers to both `app-server` and
+`linux-app-server`), so it was left on DNS rather than risk hardcoding the wrong address.
+
+### Why I Built It
+
+Repeatedly hit transient `ssh: Could not resolve hostname proxmox.taufiq.lab: No such host is
+known` failures while running the Terraform/Ansible test-loop work
+(`docs/19-devops-practice/13-terraform-ct-creation-and-full-loop-proof.md`) — the DNS chain
+(dnsmasq + Tailscale Split DNS) flaked intermittently. Retrying usually worked, but it kept
+interrupting live command sequences. Since SSH connects by IP exactly as well as by name, and
+every alias already listed its Tailscale IP as a second `Host` pattern anyway (just never used
+as the actual `HostName`), removing the DNS dependency for SSH specifically was a low-risk,
+easily-reversible fix — this is a local config file, not infrastructure.
+
+### What Broke, How I Found It, and How I Recovered
+
+Nothing broke — this was preemptive, once the flaky-resolution pattern became clear across
+several retries in the same session, not a reactive fix for a single incident. Verified
+immediately after the change: `ssh proxmox "hostname"` returned `taufiq` cleanly on the first
+attempt, at a point where the same alias had failed to resolve via DNS moments earlier.
+
+**Is this safe long-term?** Yes, for every host in this config — all of them are stable,
+always-there guests (VMs/CTs that don't get destroyed and recreated), and Tailscale IPs are
+stable once a device has joined the tailnet. This would *not* be safe for the disposable
+Terraform test-loop machines (`test-mysql`, etc., from `docs/19-devops-practice/13`) — those
+get a genuinely new IP every time they're recreated, so hardcoding them would break on the very
+next cycle. None of those have (or should have) a permanent `~/.ssh/config` entry at all, for
+exactly this reason.
+
+### Where Things Stand
+
+Every VM/CT/host alias in `~/.ssh/config` connects via a static Tailscale IP now, immune to the
+DNS chain's occasional flakiness — dnsmasq and Tailscale Split DNS are both still fully in use
+for everything else (browser access, service-to-service resolution inside the lab, etc.); this
+only changes how *this one config file* resolves its targets. `app-server` remains the one
+alias still on DNS, with a comment in the file itself flagging it for a future fix once its
+real IP is confirmed independently. This is a local `~/.ssh/config` change only, same as §14 —
+not part of this git repo.
+
+---
+
 *Documentation generated: 2 July 2026*  
 *Last coverage audit: 26 July 2026 — see §15*  
 *SSH alias coverage completed: 24 July 2026 — see §14*  
+*SSH config hardened to static IPs: 28 July 2026 — see §16*  
 *Lab domain: taufiq.lab*  
 *DNS server: dnsmasq on Proxmox (100.97.8.93)*  
 *VPN mesh: Tailscale*
