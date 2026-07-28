@@ -12,18 +12,19 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
 
 ## Why I built this
 
-`01-terraform-first-real-loop.md` and `02-terraform-state-import-and-module.md`
-proved the Terraform loop once (a disposable test set, VMs 201/204/205/206,
-torn down right after) and adopted two hand-built LXCs
-(`linux-mysql-2`/`linux-mariadb-2`) into state. Everything else the homelab
-actually runs in production was still hand-configured outside Terraform —
-`app-server` and the other three original DB VMs, plus every CT built by hand
-since (`linux-k3s`, `linux-mongodb`, `linux-vault`, `linux-gh-runner`,
-`linux-observability`). A claim written up for a public post — "no more
-manually clicking through GUI buttons for every machine, the .tf files handle
-it for me" — turned out to only be true for new VMs and those two CTs. This
-closes that gap for real: importing the rest of the live fleet, one host at a
-time, proving zero drift on each before trusting it.
+- `01-terraform-first-real-loop.md` and `02-terraform-state-import-and-module.md`
+  proved the Terraform loop once (a disposable test set, VMs 201/204/205/206,
+  torn down right after) and adopted two hand-built LXCs
+  (`linux-mysql-2`/`linux-mariadb-2`) into state.
+- Everything else the homelab actually runs in production was still
+  hand-configured outside Terraform — `app-server` and the other three
+  original DB VMs, plus every CT built by hand since (`linux-k3s`,
+  `linux-mongodb`, `linux-vault`, `linux-gh-runner`, `linux-observability`).
+- A claim written up for a public post — "no more manually clicking through
+  GUI buttons for every machine, the .tf files handle it for me" — turned out
+  to only be true for new VMs and those two CTs.
+- This closes that gap for real: importing the rest of the live fleet, one
+  host at a time, proving zero drift on each before trusting it.
 
 ## Where I started
 
@@ -71,67 +72,77 @@ time, proving zero drift on each before trusting it.
 
 ## What I found
 
-**Real spec drift, worse than the known vmid confusion.** `qm config`/
-`pct config` on every target host showed real drift from what a naive copy
-of the existing module/`containers.tf` pattern would assume: cores (1 for
-the 3 DB VMs, 2 for `app-server`/`linux-mini-io`, not a flat 2), disk sizes
-(28G/22G/22G/22G/18G+32G, not a flat 20), and `cpu: x86-64-v2-AES` on every
-VM (not the module's hardcoded `type = "host"`). Every production VM still
-had its original install ISO attached on `ide2`, and `linux-mini-io` turned
-out to have a **second real disk** (`scsi1`, 32G — the actual MinIO data
-volume) that needed its own `disk` block.
+**Real spec drift, worse than the known vmid confusion.**
+- `qm config`/`pct config` on every target host showed real drift from what a
+  naive copy of the existing module/`containers.tf` pattern would assume:
+  cores (1 for the 3 DB VMs, 2 for `app-server`/`linux-mini-io`, not a flat
+  2), disk sizes (28G/22G/22G/22G/18G+32G, not a flat 20), and
+  `cpu: x86-64-v2-AES` on every VM (not the module's hardcoded
+  `type = "host"`).
+- Every production VM still had its original install ISO attached on `ide2`.
+- `linux-mini-io` turned out to have a **second real disk** (`scsi1`, 32G —
+  the actual MinIO data volume) that needed its own `disk` block.
 
-**Two containers were genuinely powered off.** `linux-k3s` (100) and
-`linux-mongodb` (108) were stopped at import time — not part of the
-always-on core fleet. Unlike the CT import in `02` (both hosts there were
-running), `started = false` had to be declared explicitly for these two so
-`apply` wouldn't boot them as a side effect of being adopted.
+**Two containers were genuinely powered off.**
+- `linux-k3s` (100) and `linux-mongodb` (108) were stopped at import time —
+  not part of the always-on core fleet.
+- Unlike the CT import in `02` (both hosts there were running),
+  `started = false` had to be declared explicitly for these two so `apply`
+  wouldn't boot them as a side effect of being adopted.
 
 **`onboot` is inconsistent across the fleet, and I mis-transcribed it once.**
-`linux-vault` and `linux-gh-runner` have no `onboot` flag set at all in real
-life — a genuine, pre-existing gap (neither survives a host reboot today),
-left alone rather than silently "fixed" as part of this import. I initially
-copied `linux-mongodb` into that same bucket from memory, then caught it
-re-checking the live `pct config` right before import: `linux-mongodb`
-actually has `onboot: 1`. Fixed before importing, not after — exactly the
-kind of mistake this host-by-host verify-before-import discipline exists to
-catch.
+- `linux-vault` and `linux-gh-runner` have no `onboot` flag set at all in
+  real life — a genuine, pre-existing gap (neither survives a host reboot
+  today), left alone rather than silently "fixed" as part of this import.
+- I initially copied `linux-mongodb` into that same bucket from memory, then
+  caught it re-checking the live `pct config` right before import:
+  `linux-mongodb` actually has `onboot: 1`.
+- Fixed before importing, not after — exactly the kind of mistake this
+  host-by-host verify-before-import discipline exists to catch.
 
-**`linux-vault`'s raw LXC lines are duplicated.** `pct config 110` lists the
-two TUN-device lines twice. Harmless — Proxmox just accumulated a duplicate
-append at some point — left alone, noted here rather than silently ignored.
+**`linux-vault`'s raw LXC lines are duplicated.**
+- `pct config 110` lists the two TUN-device lines twice.
+- Harmless — Proxmox just accumulated a duplicate append at some point — left
+  alone, noted here rather than silently ignored.
 
 **Three VM-resource attributes default away from reality if undeclared.**
-Found building the scratch VM dry run, before touching any real host:
-`on_boot` and `started` both default to `true` on the
-`proxmox_virtual_environment_vm` resource when left undeclared — none of the
-4 production DB/app VMs have `onboot` set in real life, so leaving these out
-would have had Terraform try to enable auto-start on the very first `apply`.
-`scsi_hardware` defaults to `"virtio-scsi-pci"`; every real host here uses
-`"virtio-scsi-single"`.
+- Found building the scratch VM dry run, before touching any real host.
+- `on_boot` and `started` both default to `true` on the
+  `proxmox_virtual_environment_vm` resource when left undeclared — none of
+  the 4 production DB/app VMs have `onboot` set in real life, so leaving
+  these out would have had Terraform try to enable auto-start on the very
+  first `apply`.
+- `scsi_hardware` defaults to `"virtio-scsi-pci"`; every real host here uses
+  `"virtio-scsi-single"`.
 
-**`cdrom` can never be read back on import.** Same category as `02`'s
-`operating_system.template_file_id` lesson for CTs — Proxmox doesn't persist
-it in a form the provider's read populates into state, so it shows as an
-"add" on the very first `plan` after import, regardless of whether it
-matches reality. The provider's own default `interface` for an undeclared
-cdrom is `"ide3"`, which doesn't match any of these hosts' real `"ide2"` —
-declaring `interface = "ide2"` explicitly made the one-time apply a genuine
-no-op against the Proxmox API rather than adding a second, unrelated cdrom
-device. Confirmed via `qm config` byte-identical before/after on every host.
+**`cdrom` can never be read back on import.**
+- Same category as `02`'s `operating_system.template_file_id` lesson for
+  CTs — Proxmox doesn't persist it in a form the provider's read populates
+  into state, so it shows as an "add" on the very first `plan` after import,
+  regardless of whether it matches reality.
+- The provider's own default `interface` for an undeclared cdrom is
+  `"ide3"`, which doesn't match any of these hosts' real `"ide2"` —
+  declaring `interface = "ide2"` explicitly made the one-time apply a
+  genuine no-op against the Proxmox API rather than adding a second,
+  unrelated cdrom device.
+- Confirmed via `qm config` byte-identical before/after on every host.
 
 **The "vmid drift" flagged in `docs/12-mysql-shelter-animals-split` wasn't a
-bug.** `vms.tf` declaring the test loop's `linux-mysql` as vmid 204 while the
-real one is 104 was never a collision — the test loop and the real
-production VM are different Terraform resources entirely (module instance
-vs. root resource), so nothing was ever at risk. The actual fix was naming
-clarity, not a bug fix: the test loop's `locals.vms` keys are now `test-`
-prefixed, so `terraform state list` reads unambiguously now that real
-production resources exist alongside them.
+bug.**
+- `vms.tf` declaring the test loop's `linux-mysql` as vmid 204 while the real
+  one is 104 was never a collision — the test loop and the real production
+  VM are different Terraform resources entirely (module instance vs. root
+  resource), so nothing was ever at risk.
+- The actual fix was naming clarity, not a bug fix: the test loop's
+  `locals.vms` keys are now `test-` prefixed, so `terraform state list`
+  reads unambiguously now that real production resources exist alongside
+  them.
 
-**Deliberately excluded:** `opnsense` (200 — the network's actual gateway,
-a different risk class than everything else here), and the stopped legacy
-VMs (102, 103, 107) plus template 9000 — not part of the live fleet.
+**Deliberately excluded:**
+- `opnsense` (200 — the network's actual gateway, a different risk class
+  than everything else here).
+- The stopped legacy VMs (102, 103, 107) plus template 9000 — not part of
+  the live fleet.
 
 ## Verification
 
@@ -170,9 +181,9 @@ VMs (102, 103, 107) plus template 9000 — not part of the live fleet.
 
 ## What happened to the scratch resources
 
-One scratch CT (199) and one scratch VM (198), both built fresh (never
-cloned from a real host), used only to prove the schema-level gotchas above
-before touching anything real. Both destroyed (`pct destroy 199` /
-`qm destroy 198`) immediately after their dry runs confirmed zero drift —
-same "never experiment on production" discipline `02` established for the
-container import.
+- One scratch CT (199) and one scratch VM (198), both built fresh (never
+  cloned from a real host), used only to prove the schema-level gotchas
+  above before touching anything real.
+- Both destroyed (`pct destroy 199` / `qm destroy 198`) immediately after
+  their dry runs confirmed zero drift — same "never experiment on
+  production" discipline `02` established for the container import.

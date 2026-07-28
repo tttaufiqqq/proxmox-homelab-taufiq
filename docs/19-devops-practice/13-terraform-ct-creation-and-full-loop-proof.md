@@ -12,23 +12,24 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
 
 ## Why I built this
 
-`01-terraform-first-real-loop.md` proved Terraform could create a VM from
-scratch. It never proved Terraform could create a **CT** from scratch —
-every real CT this project manages (`linux-mysql-2`, `linux-mariadb-2`,
-`linux-vault`, `linux-gh-runner`) was adopted via `terraform import`,
-hand-built first. This closes that gap, and goes one step further than
-`01` did: proving the *entire* pipeline lands a genuinely working app, not
-just that machines boot. Terraform creates the machine, a manual bridge
-handles the one thing Terraform's schema can't express (a CT's Tailscale
-join), and Ansible configures real software on top — MySQL, MariaDB,
-PostgreSQL, and as much of `app-server` as doesn't require a real public
-domain.
-
-To make room for this, the real production fleet (`app-server` and the 3
-original DB VMs) was intentionally stopped first, freeing capacity for the
-test loop to run without contending with live traffic. Once the loop was
-proven end to end, every test machine was torn back down — this was never
-meant to be a second permanent environment, same discipline as `01`.
+- `01-terraform-first-real-loop.md` proved Terraform could create a VM from
+  scratch, but never proved it could create a **CT** from scratch.
+- Every real CT this project manages (`linux-mysql-2`, `linux-mariadb-2`,
+  `linux-vault`, `linux-gh-runner`) was adopted via `terraform import`,
+  hand-built first.
+- This closes that gap, and goes one step further than `01` did: proving
+  the *entire* pipeline lands a genuinely working app, not just that
+  machines boot.
+- Terraform creates the machine, a manual bridge handles the one thing
+  Terraform's schema can't express (a CT's Tailscale join), and Ansible
+  configures real software on top — MySQL, MariaDB, PostgreSQL, and as
+  much of `app-server` as doesn't require a real public domain.
+- To make room for this, the real production fleet (`app-server` and the 3
+  original DB VMs) was intentionally stopped first, freeing capacity for
+  the test loop to run without contending with live traffic.
+- Once the loop was proven end to end, every test machine was torn back
+  down — this was never meant to be a second permanent environment, same
+  discipline as `01`.
 
 ## Where I started
 
@@ -76,35 +77,41 @@ meant to be a second permanent environment, same discipline as `01`.
 ## What I found
 
 **Capacity was tighter than expected, even with production stopped.**
-Stopping `app-server` + the 3 original DB VMs only freed the host to
-6.7GB available — `linux-oracle-db`, `opnsense`, `linux-mini-io`, and
-`linux-observability` were all still running independently. Stopping
-Oracle too got it to 10GB available, enough for the 4 VMs (8GB) plus 2
-small CTs (1GB) with real margin. The 2 new CTs were deliberately sized at
-512MB/1 core rather than matching their real counterparts — they only
-needed to prove creation works, not carry load.
+- Stopping `app-server` + the 3 original DB VMs only freed the host to
+  6.7GB available — `linux-oracle-db`, `opnsense`, `linux-mini-io`, and
+  `linux-observability` were all still running independently.
+- Stopping Oracle too got it to 10GB available, enough for the 4 VMs (8GB)
+  plus 2 small CTs (1GB) with real margin.
+- The 2 new CTs were deliberately sized at 512MB/1 core rather than
+  matching their real counterparts — they only needed to prove creation
+  works, not carry load.
 
-**A Proxmox lock timeout when VMs and CTs apply together.** The first
-`terraform apply` (4 VMs + 2 CTs, one command) errored on both CT starts:
-`can't lock file '/run/lock/lxc/pve-config-<id>.lock' - got timeout`. The
-containers were actually created and running fine underneath — only the
-API's status polling hit the lock contention, not the real operation.
-Root cause: 4 concurrent VM clones are I/O-heavy enough on a 4-core host
-to starve the CT start tasks' lock acquisition. Terraform marked both CTs
-"tainted" as a result, which would have destroyed and recreated two
-perfectly healthy containers for nothing — `terraform untaint` instead.
-The real fix, proven on the second full run: **apply VMs and CTs as two
-separate stages**, not by tuning `-parallelism` down (which would have
-slowed the 4 VMs' own parallelism too, for no reason — they never
-actually collided with each other).
+**A Proxmox lock timeout when VMs and CTs apply together.**
+- The first `terraform apply` (4 VMs + 2 CTs, one command) errored on both
+  CT starts: `can't lock file '/run/lock/lxc/pve-config-<id>.lock' - got
+  timeout`.
+- The containers were actually created and running fine underneath — only
+  the API's status polling hit the lock contention, not the real
+  operation.
+- Root cause: 4 concurrent VM clones are I/O-heavy enough on a 4-core host
+  to starve the CT start tasks' lock acquisition.
+- Terraform marked both CTs "tainted" as a result, which would have
+  destroyed and recreated two perfectly healthy containers for nothing —
+  `terraform untaint` instead.
+- The real fix, proven on the second full run: **apply VMs and CTs as two
+  separate stages**, not by tuning `-parallelism` down (which would have
+  slowed the 4 VMs' own parallelism too, for no reason — they never
+  actually collided with each other).
 
-**Cloned VM disks don't track `file_format`.** Every one of the 4 VMs
-showed `file_format: "raw" -> "qcow2"` as a plan diff that persisted
-identically even after applying it — Proxmox's clone operation doesn't
-preserve that attribute the way a fresh disk creation does. Same category
-as `02`'s `operating_system.template_file_id` lesson for CTs. Fixed
-properly with `disk[0].file_format` added to `modules/proxmox-vm`'s
-`ignore_changes`, not by repeatedly applying.
+**Cloned VM disks don't track `file_format`.**
+- Every one of the 4 VMs showed `file_format: "raw" -> "qcow2"` as a plan
+  diff that persisted identically even after applying it — Proxmox's
+  clone operation doesn't preserve that attribute the way a fresh disk
+  creation does.
+- Same category as `02`'s `operating_system.template_file_id` lesson for
+  CTs.
+- Fixed properly with `disk[0].file_format` added to `modules/proxmox-vm`'s
+  `ignore_changes`, not by repeatedly applying.
 
 **Fresh CTs need three things Terraform's schema can't provide, done by
 hand via `pct exec` straight from the Proxmox host** (no network path
@@ -119,94 +126,111 @@ into the CT needed yet, since it has none at this point):
    automatically.
 
 **`terraform destroy` doesn't deregister a machine from Tailscale.**
-Recreating the 4 VMs (same hostnames) after destroying the first attempt
-collided with their own stale "offline" Tailscale device entries —
-MagicDNS appended `-1` to every one of them (`test-mysql-1`, etc.) to
-disambiguate. The 2 CTs didn't hit this, since they were joining Tailscale
-for the first time (their first attempt never got far enough to actually
-join before being destroyed). Real, recurring gotcha for any future
-destroy+recreate cycle: check `tailscale status` after, don't assume a
-plain hostname still points at the current machine.
+- Recreating the 4 VMs (same hostnames) after destroying the first
+  attempt collided with their own stale "offline" Tailscale device
+  entries — MagicDNS appended `-1` to every one of them (`test-mysql-1`,
+  etc.) to disambiguate.
+- The 2 CTs didn't hit this, since they were joining Tailscale for the
+  first time (their first attempt never got far enough to actually join
+  before being destroyed).
+- Real, recurring gotcha for any future destroy+recreate cycle: check
+  `tailscale status` after, don't assume a plain hostname still points at
+  the current machine.
 
 **Running Ansible from WSL against files on `/mnt/c` breaks more than
-just role lookup.** `ansible-playbook` isn't installed on Windows at all,
-so this had to run from WSL. First attempt failed with "role
-'mysql_family' not found" — but the real cause, visible in Ansible's own
-warning, was that it distrusts `ansible.cfg` entirely when the directory
-looks "world writable" (a WSL/NTFS permission quirk on `/mnt/c` mounts,
-not a real security issue). That silently drops `roles_path`, but also
-`remote_user` and `private_key_file` — everything the config file sets.
-Fixed by copying the `ansible/` directory to WSL's native filesystem and
-running from there instead, which also happens to match how the real
-pipeline actually works: production Ansible runs on `linux-gh-runner`, a
-native Linux VM, never from a Windows/WSL hybrid mount.
+just role lookup.**
+- `ansible-playbook` isn't installed on Windows at all, so this had to
+  run from WSL.
+- First attempt failed with "role 'mysql_family' not found" — but the
+  real cause, visible in Ansible's own warning, was that it distrusts
+  `ansible.cfg` entirely when the directory looks "world writable" (a
+  WSL/NTFS permission quirk on `/mnt/c` mounts, not a real security
+  issue).
+- That silently drops `roles_path`, but also `remote_user` and
+  `private_key_file` — everything the config file sets.
+- Fixed by copying the `ansible/` directory to WSL's native filesystem and
+  running from there instead, which also happens to match how the real
+  pipeline actually works: production Ansible runs on `linux-gh-runner`,
+  a native Linux VM, never from a Windows/WSL hybrid mount.
 
-**WSL can't resolve Tailscale MagicDNS hostnames.** Same class of problem
-this repo already hit once (`.scratch-inventory-ip-override.yml` exists
-for exactly this reason, for the real production hosts). The new
-`.scratch-inventory-test-loop.yml` needed raw Tailscale IPs in
-`ansible_host`, not hostnames.
+**WSL can't resolve Tailscale MagicDNS hostnames.**
+- Same class of problem this repo already hit once
+  (`.scratch-inventory-ip-override.yml` exists for exactly this reason,
+  for the real production hosts).
+- The new `.scratch-inventory-test-loop.yml` needed raw Tailscale IPs in
+  `ansible_host`, not hostnames.
 
-**Fresh CTs only ever get a `root` account — never `workshop`.** The VMs'
-cloud-init explicitly creates `workshop` (and `taufiq`, per `01`'s fix);
-a CT's `initialization.user_account` block only sets up SSH keys for
-`root`, with no equivalent mechanism to create additional users. Fixed by
-overriding `ansible_user: root` for the two CT hosts in the inventory.
+**Fresh CTs only ever get a `root` account — never `workshop`.**
+- The VMs' cloud-init explicitly creates `workshop` (and `taufiq`, per
+  `01`'s fix); a CT's `initialization.user_account` block only sets up
+  SSH keys for `root`, with no equivalent mechanism to create additional
+  users.
+- Fixed by overriding `ansible_user: root` for the two CT hosts in the
+  inventory.
 
 **A real playbook assumption broke against a genuinely fresh clone of an
-existing role.** `mysql_family_bootstrap_root_auth` is hardcoded `false`
-in `linux-mysql-2.yml`/`linux-mariadb-2.yml`, because the *real*
-`linux-mysql-2`/`linux-mariadb-2` were already hand-configured with
-password auth before this playbook ever touched them (see
-`docs/12-mysql-shelter-animals-split`). That assumption is correct for
-those specific real hosts, and wrong for a genuinely fresh MySQL install
-under the same role — the test CTs still had root on socket auth,
-untouched. Fixed for this run with
-`-e '{"mysql_family_bootstrap_root_auth": true}'` (note: must be real
-JSON, not a bare `-e var=true` string — this Ansible version rejects a
-string result in a `when:` boolean context).
+existing role.**
+- `mysql_family_bootstrap_root_auth` is hardcoded `false` in
+  `linux-mysql-2.yml`/`linux-mariadb-2.yml`, because the *real*
+  `linux-mysql-2`/`linux-mariadb-2` were already hand-configured with
+  password auth before this playbook ever touched them (see
+  `docs/12-mysql-shelter-animals-split`).
+- That assumption is correct for those specific real hosts, and wrong for
+  a genuinely fresh MySQL install under the same role — the test CTs
+  still had root on socket auth, untouched.
+- Fixed for this run with
+  `-e '{"mysql_family_bootstrap_root_auth": true}'` (note: must be real
+  JSON, not a bare `-e var=true` string — this Ansible version rejects a
+  string result in a `when:` boolean context).
 
 **PowerShell mangles an unquoted `-target` value that contains a dot.**
-Running these same `terraform apply -target=...` commands from PowerShell
-(rather than this session's WSL/bash) failed in two different ways before
-landing on the fix. `-target=module.vm` errored `Invalid target "module" /
-Prefix "module." must be followed by a module name"` — `Get-History`
-confirmed PowerShell had recorded the full, correct text, so this wasn't a
-typing or autocomplete problem; something in how PowerShell serializes an
-unquoted native-command argument containing a `.` was truncating it before
-`terraform.exe` ever saw it. Same failure on
-`-target=proxmox_virtual_environment_container.test_mysql_2`, this time
-also throwing "Too many command line arguments." **The fix: wrap the
-entire target value in double quotes** — `-target="module.vm"`,
-`-target="proxmox_virtual_environment_container.test_mysql_2"` — which
-resolved it completely. Bash/WSL never hit this at all; it's specific to
-invoking `terraform.exe` from PowerShell.
+- Running these same `terraform apply -target=...` commands from
+  PowerShell (rather than this session's WSL/bash) failed in two
+  different ways before landing on the fix.
+- `-target=module.vm` errored `Invalid target "module" / Prefix "module."
+  must be followed by a module name"` — `Get-History` confirmed
+  PowerShell had recorded the full, correct text, so this wasn't a typing
+  or autocomplete problem; something in how PowerShell serializes an
+  unquoted native-command argument containing a `.` was truncating it
+  before `terraform.exe` ever saw it.
+- Same failure on
+  `-target=proxmox_virtual_environment_container.test_mysql_2`, this time
+  also throwing "Too many command line arguments."
+- **The fix: wrap the entire target value in double quotes** —
+  `-target="module.vm"`,
+  `-target="proxmox_virtual_environment_container.test_mysql_2"` — which
+  resolved it completely.
+- Bash/WSL never hit this at all; it's specific to invoking
+  `terraform.exe` from PowerShell.
 
-**An interrupted `apply` left two real, untracked containers, and revealed
-a genuinely un-fixable-by-updating attribute.** Force-cancelling (Ctrl+C
-twice) an `apply` mid-flight left `test-mysql-2`/`test-mariadb-2` fully
-created and running on Proxmox, but never written to Terraform's state —
-a real orphan. `terraform import` brought them back in cleanly, but the
-very next `plan` wanted to destroy and recreate both anyway:
-`initialization.user_account` (the SSH key block) showed
-`# forces replacement`. Unlike every other unreadable attribute in this
-project so far (`operating_system`, `disk.file_format`), this one can't
-just be re-applied to converge — Proxmox has no API to change a
-container's `user_account` after creation, only at creation time, so any
-diff on it is unresolvable in place. Fixed the same way as the others
-regardless: `initialization[0].user_account` added to
-`lifecycle.ignore_changes`, confirmed `pct config` byte-identical
-afterward.
+**An interrupted `apply` left two real, untracked containers, and
+revealed a genuinely un-fixable-by-updating attribute.**
+- Force-cancelling (Ctrl+C twice) an `apply` mid-flight left
+  `test-mysql-2`/`test-mariadb-2` fully created and running on Proxmox,
+  but never written to Terraform's state — a real orphan.
+- `terraform import` brought them back in cleanly, but the very next
+  `plan` wanted to destroy and recreate both anyway:
+  `initialization.user_account` (the SSH key block) showed
+  `# forces replacement`.
+- Unlike every other unreadable attribute in this project so far
+  (`operating_system`, `disk.file_format`), this one can't just be
+  re-applied to converge — Proxmox has no API to change a container's
+  `user_account` after creation, only at creation time, so any diff on it
+  is unresolvable in place.
+- Fixed the same way as the others regardless:
+  `initialization[0].user_account` added to `lifecycle.ignore_changes`,
+  confirmed `pct config` byte-identical afterward.
 
-**The one deliberate stopping point, not a bug:** `app-server.yml` fails
-at "Deploy .env from template" because `app_domain`/`certbot_email` are
-undefined — correct behavior, since those variables gate a real certbot
-TLS run against a real public DNS record (see
-`docs/09-production-hardening.md`'s TLS section). Faking a domain for a
-disposable test VM would mean pointing real DNS at a throwaway host for
-nothing. 27 tasks succeeded before this point: PHP 8.3, Nginx, Composer,
-Node.js installed, the real `Animal-Shelter-Workshop` repo cloned,
-permissions set, Composer dependencies installed.
+**The one deliberate stopping point, not a bug:**
+- `app-server.yml` fails at "Deploy .env from template" because
+  `app_domain`/`certbot_email` are undefined — correct behavior, since
+  those variables gate a real certbot TLS run against a real public DNS
+  record (see `docs/09-production-hardening.md`'s TLS section).
+- Faking a domain for a disposable test VM would mean pointing real DNS
+  at a throwaway host for nothing.
+- 27 tasks succeeded before this point: PHP 8.3, Nginx, Composer, Node.js
+  installed, the real `Animal-Shelter-Workshop` repo cloned, permissions
+  set, Composer dependencies installed.
 
 ## Verification
 
@@ -229,13 +253,13 @@ permissions set, Composer dependencies installed.
 
 ## Planned next step — not yet built
 
-A bash/shell script to automate stages 2-4 above (staged `terraform
-apply`, the CT TUN/Tailscale bridge, waiting for every host to actually
-show *online* on Tailscale — not just present in `tailscale status`,
-since offline hosts stay listed too — then handing off to
-`ansible-playbook`) was designed but deliberately **not committed as code
-yet**, per the call to document the plan first and build it later. Its
-shape, once built:
+- A bash/shell script to automate stages 2-4 above (staged `terraform
+  apply`, the CT TUN/Tailscale bridge, waiting for every host to actually
+  show *online* on Tailscale — not just present in `tailscale status`,
+  since offline hosts stay listed too — then handing off to
+  `ansible-playbook`) was designed but deliberately **not committed as
+  code yet**, per the call to document the plan first and build it later.
+- Its shape, once built:
 
 1. `terraform apply -auto-approve -target="module.vm"` — separate from
    stage 2, since combining them is what caused the lock timeout. The
@@ -251,12 +275,13 @@ shape, once built:
 6. Hand off to `ansible-playbook -i .scratch-inventory-test-loop.yml
    playbooks/site.yml`, run from WSL's native filesystem, not `/mnt/c`.
 
-Building this for real should also account for the two overrides that
-were manual this time (`ansible_user: root` for the CTs, already in the
-inventory; `mysql_family_bootstrap_root_auth=true`, currently a manual
-`-e` flag) — worth deciding whether the script hardcodes that extra-var
-for every test-loop run, or whether it stays a manual reminder in the
-script's own comments.
+- Building this for real should also account for the two overrides that
+  were manual this time (`ansible_user: root` for the CTs, already in the
+  inventory; `mysql_family_bootstrap_root_auth=true`, currently a manual
+  `-e` flag).
+- Worth deciding whether the script hardcodes that extra-var for every
+  test-loop run, or whether it stays a manual reminder in the script's
+  own comments.
 
 ## Where things live
 

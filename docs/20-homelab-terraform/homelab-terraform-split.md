@@ -4,51 +4,32 @@
 
 ## Why I built this
 
-The devops practice series (`docs/19-devops-practice/`) proved and then
-extended Terraform inside `Animal-Shelter-Workshop`'s own repo. Its plan
-states outright — **"Scope: Animal Shelter Workshop only"** — every stage
-targets that one project and the infrastructure that serves it. Importing
-the *entire* live Proxmox fleet into that same Terraform (see
-`docs/19-devops-practice/12`) quietly broke that boundary: `linux-mini-io`,
-`linux-k3s`, `linux-mongodb`, and `linux-observability` aren't ASW-specific
-at all. `linux-observability` monitors all 12 live hosts fleet-wide, not
-just ASW's. `linux-mini-io` is general-purpose S3 storage that also backs
-`Library-System-EDP` (per this repo's own `README.md`), and now hosts
-Terraform's own state backend on top of that. `linux-mongodb` isn't part of
-ASW's DB architecture at all — it's a separate, general-purpose document
-store. `linux-k3s` is homelab-level compute, not tied to one app. Managing
-genuinely shared infrastructure from inside one coursework project's repo
-was the wrong home for it — this splits it out.
+- The devops practice series (`docs/19-devops-practice/`) proved and then extended Terraform inside `Animal-Shelter-Workshop`'s own repo.
+- Its plan states outright — **"Scope: Animal Shelter Workshop only"** — every stage targets that one project and the infrastructure that serves it.
+- Importing the *entire* live Proxmox fleet into that same Terraform (see `docs/19-devops-practice/12`) quietly broke that boundary:
+  - `linux-mini-io`, `linux-k3s`, `linux-mongodb`, and `linux-observability` aren't ASW-specific at all.
+  - `linux-observability` monitors all 12 live hosts fleet-wide, not just ASW's.
+  - `linux-mini-io` is general-purpose S3 storage that also backs `Library-System-EDP` (per this repo's own `README.md`), and now hosts Terraform's own state backend on top of that.
+  - `linux-mongodb` isn't part of ASW's DB architecture at all — it's a separate, general-purpose document store.
+  - `linux-k3s` is homelab-level compute, not tied to one app.
+- Managing genuinely shared infrastructure from inside one coursework project's repo was the wrong home for it — this splits it out.
 
 ## What moved where
 
-**Stayed in `Animal-Shelter-Workshop`** — exactly what that project needs,
-nothing more: its 5 DB connections (`linux-mysql`, `linux-mysql-2`,
-`linux-mariadb`, `linux-mariadb-2`, `linux-postgres`), `app-server`,
-`linux-vault` (this app's secrets), and `linux-gh-runner` (this app's
-CI/CD). 8 resources.
-
-**Moved here**, into this repo's own `infrastructure/terraform/`:
-`linux-mini-io` (VM 109), `linux-k3s` (CT 100), `linux-mongodb` (CT 108),
-and `linux-observability` (CT 114). 4 resources.
-
-**Deliberately outside Terraform everywhere:** `opnsense` (the network's
-actual gateway) and the stopped legacy VMs (102/103/107, template 9000) —
-unchanged from `docs/19-devops-practice/12`'s original exclusions.
+- **Stayed in `Animal-Shelter-Workshop`** — exactly what that project needs, nothing more:
+  - Its 5 DB connections (`linux-mysql`, `linux-mysql-2`, `linux-mariadb`, `linux-mariadb-2`, `linux-postgres`), `app-server`, `linux-vault` (this app's secrets), and `linux-gh-runner` (this app's CI/CD).
+  - 8 resources.
+- **Moved here**, into this repo's own `infrastructure/terraform/`:
+  - `linux-mini-io` (VM 109), `linux-k3s` (CT 100), `linux-mongodb` (CT 108), and `linux-observability` (CT 114).
+  - 4 resources.
+- **Deliberately outside Terraform everywhere:**
+  - `opnsense` (the network's actual gateway) and the stopped legacy VMs (102/103/107, template 9000) — unchanged from `docs/19-devops-practice/12`'s original exclusions.
 
 ## How the move actually worked
 
-This repo had **no infrastructure code at all** before this — it's
-documented in its own `README.md` as "the running log of a personal
-homelab," docs and plans only. First time real (gitignored) credentials
-and live `.tf` resource management moved into it, worth naming rather than
-doing silently.
-
-`terraform state rm` and `terraform import` are pure bookkeeping — neither
-touches the real VM/CT — so the actual migration mechanics were low-risk,
-but still done in the safest order: import into the **new** location
-first, verify zero drift there, and only remove each resource from ASW's
-state once its replacement was already proven clean.
+- This repo had **no infrastructure code at all** before this — it's documented in its own `README.md` as "the running log of a personal homelab," docs and plans only.
+- First time real (gitignored) credentials and live `.tf` resource management moved into it, worth naming rather than doing silently.
+- `terraform state rm` and `terraform import` are pure bookkeeping — neither touches the real VM/CT — so the actual migration mechanics were low-risk, but still done in the safest order: import into the **new** location first, verify zero drift there, and only remove each resource from ASW's state once its replacement was already proven clean.
 
 1. New MinIO bucket (`homelab-infra-tfstate`) and a separately-scoped
    credential (`terraform-homelab`, policy-restricted to only that
@@ -78,12 +59,10 @@ state once its replacement was already proven clean.
    `production-vms.tf`, and confirmed ASW's own `terraform plan` still
    showed zero drift on its remaining 8 resources.
 
-**One thing caught mid-task, not planned for upfront:** the original scope
-only named `linux-mini-io`/`linux-k3s`/`linux-observability`. Re-checking
-ASW's actual `terraform state list` before touching anything surfaced
-`linux-mongodb` too — never part of ASW's DB architecture, just imported
-into the same batch as everything else last time. Caught before any state
-was removed, added to the move.
+**One thing caught mid-task, not planned for upfront:**
+- The original scope only named `linux-mini-io`/`linux-k3s`/`linux-observability`.
+- Re-checking ASW's actual `terraform state list` before touching anything surfaced `linux-mongodb` too — never part of ASW's DB architecture, just imported into the same batch as everything else last time.
+- Caught before any state was removed, added to the move.
 
 ## Verification
 
