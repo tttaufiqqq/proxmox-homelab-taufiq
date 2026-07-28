@@ -24,7 +24,7 @@ Swap: 7.6Gi total, 2.0Gi used, 5.6Gi free
 512MB) and `linux-observability` (CT, 1536MB) actually running at that
 moment — everything else (all 3 original DB VMs, app-server, k3s,
 mongodb, gh-runner, the `-2` DB CTs) was powered off. This repo's own
-`plans/devops-practice-plan.md` already measured this same ceiling on
+`plans/02-devops-practice-plan (executed).md` already measured this same ceiling on
 2026-07-26 and named the fix: **converting `linux-mysql`/`linux-mariadb`
 from VMs to CTs is "the biggest single lever" for reclaiming RAM**, because
 Proxmox VMs here have no balloon device — their declared memory is

@@ -27,7 +27,7 @@ applied to a different part of the terminal.
 
 ## Design: one shape, per-host color
 
-The plan for this (`plans/oh-my-posh-server-theme-plan.md`) went through a
+The plan for this (`plans/03-oh-my-posh-server-theme-plan (executed).md`) went through a
 few iterations before landing here. The first draft assigned different
 *theme families* to tiers like "web", "database", "staging", modeled on a
 dev → staging → production pipeline this homelab doesn't actually have.

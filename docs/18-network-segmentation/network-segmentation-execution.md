@@ -2,7 +2,7 @@
 
 **Author:** Taufiq
 **Date:** 24 July 2026
-**Scope:** Turning [`homelab-network-segmentation-execution-plan.md`](../../plans/homelab-network-segmentation-execution-plan.md) from a design doc into a running network — OPNsense install, per-VLAN DHCP, firewall rules, and every real thing that broke along the way.
+**Scope:** Turning [`homelab-network-segmentation-execution-plan.md`](../../plans/01-homelab-network-segmentation-execution-plan%20(executed).md) from a design doc into a running network — OPNsense install, per-VLAN DHCP, firewall rules, and every real thing that broke along the way.
 
 ---
 
@@ -175,4 +175,4 @@ session the original tests ran from — same results both times:
 ![app-server's own terminal reproducing the exact same VLAN 40 isolation results](images/15-app-server-isolation-verified-by-user.png)
 ![spring-boot-app's own terminal reproducing the exact same VLAN 30 isolation results](images/16-spring-boot-app-isolation-verified-by-user.png)
 
-Full step-by-step execution log (commands run, exact config) lives in [`homelab-network-segmentation-execution-plan.md`](../../plans/homelab-network-segmentation-execution-plan.md)'s Execution Log section — this doc is the narrative version of the same work.
+Full step-by-step execution log (commands run, exact config) lives in [`homelab-network-segmentation-execution-plan.md`](../../plans/01-homelab-network-segmentation-execution-plan%20(executed).md)'s Execution Log section — this doc is the narrative version of the same work.

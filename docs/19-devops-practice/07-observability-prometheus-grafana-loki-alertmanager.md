@@ -99,7 +99,7 @@ scrape or alert issue directly.
 
 ### 0. VLAN 80 activation, the reserved VLAN finally got firewall rules
 
-`plans/homelab-network-segmentation-execution-plan.md` set VLAN 80
+`plans/01-homelab-network-segmentation-execution-plan (executed).md` set VLAN 80
 (`10.0.80.0/24`) aside for exactly this stage back in July, but it had never
 actually been used, OPNsense had a NIC and Kea DHCP live on it (confirmed:
 the new CT got a real lease, `10.0.80.100`/gw `10.0.80.1`), but **zero
@@ -372,7 +372,7 @@ breaks something silently.
   `telegram_bot_token` / `telegram_chat_id`, alongside `mysql_root_password`.
   Not written to any file in either repo.
 
-Stage 6's plan checklist is checked off in `plans/devops-practice-plan.md`
+Stage 6's plan checklist is checked off in `plans/02-devops-practice-plan (executed).md`
 (left uncommitted, per this repo's own convention).
 
 **Next up per the plan:** Stage 7, GitOps (ArgoCD inside Stage 5's k3s

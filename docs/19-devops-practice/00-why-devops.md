@@ -22,7 +22,7 @@ through it stage by stage.
 
 ![Terraform, Proxmox, and Ansible pipeline: Terraform defines each machine's spec and sends API calls to Proxmox, Proxmox creates the VMs/CTs, then once a machine boots and joins Tailscale, Ansible SSHes in to install the DBMS, PHP, and dependencies](images/terraform-proxmox-ansible-pipeline.png)
 
-The plan itself lives in `plans/devops-practice-plan.md`. This series is
+The plan itself lives in `plans/02-devops-practice-plan (executed).md`. This series is
 the writeup of actually doing it, stage by stage, in plan order, each doc
 written the same way every other doc in this repo is: what I built, why,
 what broke, how I found it, how I recovered. Some of it went in a
