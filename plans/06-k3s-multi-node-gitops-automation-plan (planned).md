@@ -90,6 +90,32 @@ need to keep telling you what's wrong. Use a `nodeSelector` on the ArgoCD
 and observability manifests to pin them to node 1 explicitly rather than
 relying on the scheduler happening to spread them out.
 
+Target architecture this stage builds toward:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Proxmox host                                         │▏
+│                                                         │▏
+│  ┌───────────────────────┐  ┌───────────────────────┐ │▏
+│  │  k3s NODE 1 (server)   │  │  k3s NODE 2 (agent)    │ │▏
+│  │  control-plane          │  │  worker only            │ │▏
+│  │                          │  │                          │ │▏
+│  │  ┌──────────┐          │  │  ┌──────────┐          │ │▏
+│  │  │  ArgoCD    │          │  │  │  asw-app  │          │ │▏
+│  │  └──────────┘          │  │  └──────────┘          │ │▏
+│  │  ┌──────────┐          │  │  ┌──────────┐          │ │▏
+│  │  │ Prometheus │          │  │  │cloudflared│          │ │▏
+│  │  │  /Grafana  │          │  │  └──────────┘          │ │▏
+│  │  └──────────┘          │  │                          │ │▏
+│  └───────────────────────┘  └───────────────────────┘ │▏
+└──────────────────────────────────────────────────────┘▔▔
+```
+
+Today, before this plan, both boxes collapse into one — everything
+(ArgoCD, Prometheus/Grafana/Loki, `asw-app`) already runs on the single
+existing CT (`linux-k3s`), separated only by namespace, not by node. This
+stage is what actually splits it into the two-box picture above.
+
 **Stage 3 — prove real HA, not simulated HA.** Stage 5 of the original
 devops-practice-plan already practiced taints/tolerations and draining,
 but explicitly *on one node* (multi-node expansion was deferred, tracked
@@ -123,12 +149,121 @@ go-live moment. Own Deployment, pointed at
 in-cluster caller), tunnel token stored as a k8s Secret. Scheduled onto
 node 2 alongside `asw-app` per Stage 2's split.
 
+The gap this closes:
+
+```
+┌────────────────────────────────────┐
+│         TODAY                      │▏
+└────────────────────────────────────┘▔▔
+
+  animal-shelter-workshop.tttaufiqqq.com
+              │  (Cloudflare edge, outbound-only tunnel)
+              ▼
+┌─────────────────────────┐
+│   app-server (VM 101)    │▏   cloudflared.service (systemd)
+│   cloudflared → :80      │▏   → local nginx on same VM
+└─────────────────────────┘▔▔
+
+  k3s, meanwhile: asw-app's Service is only a NodePort —
+  reachable inside the tailnet, no path from the public internet at all
+
+┌────────────────────────────────────┐
+│      AFTER THIS STAGE               │▏
+└────────────────────────────────────┘▔▔
+
+  animal-shelter-workshop.tttaufiqqq.com
+              │  (same tunnel mechanism, new host)
+              ▼
+┌─────────────────────────┐
+│  cloudflared Deployment   │▏   runs INSIDE k3s (node 2),
+│  → asw-app ClusterIP      │▏   no NodePort needed at all
+└─────────────────────────┘▔▔
+```
+
+`app-server`'s own `cloudflared.service` gets stopped once this is live —
+this is precisely what makes `app-server` safe to power off in plan 07,
+since nothing left running still depends on it.
+
 **Stage 7 — prove the whole loop end to end, once, for real.** A trivial
 code change (e.g. a comment or a one-line template tweak), pushed to
 `main`, with nothing run by hand afterward: tests → CI build/push/bump →
 ArgoCD sync → new pod live. This is the actual deliverable — "fully
 automated" isn't true until this has been watched happening once, not
 assumed from the pieces existing.
+
+---
+
+## The fully-automated CI/CD pipeline, in detail (Stages 4-5)
+
+What "fully automated" actually means here: nothing between `git push` and
+a new pod running should require a human to run `docker` or `kubectl` by
+hand. Two paths shown — the default polled sync, and the optional instant
+one from Stage 5:
+
+```
+┌────────────────────────────────────┐
+│  git push (app code, main branch)  │▏
+└────────────────────────────────────┘▔▔
+              │
+              ▼
+┌────────────────────────────────┐     already exists — tests.yml
+│  tests.yml                       │▏    must pass before anything
+└────────────────────────────────┘▔▔    below is allowed to run
+              │  success
+              ▼
+┌────────────────────────────────┐     NEW — Stage 4
+│  CI: build image                 │▏    Stage 4's Dockerfile,
+│  (Animal-Shelter-Workshop repo)  │▏    multi-stage, same as always
+└────────────────────────────────┘▔▔
+              │
+              ▼
+┌────────────────────────────────┐     tagged with the COMMIT SHA,
+│  docker push                     │▏    never `latest` — ArgoCD needs
+│  → docker.io/tttaufiqqq/asw       │▏    an actual new tag to see a diff
+└────────────────────────────────┘▔▔
+              │
+              ▼
+┌────────────────────────────────┐     sed/yq bump of `image:` in
+│  commit + push back to main       │▏    k8s/deployment.yaml, using
+│  (bumps k8s/deployment.yaml)      │▏    GITHUB_TOKEN, contents: write
+└────────────────────────────────┘▔▔
+              │
+              ├──────────────────────────────┐
+              ▼ (default)                     ▼ (Stage 5, optional)
+┌────────────────────────────────┐     ┌────────────────────────────────┐
+│  ArgoCD polls git                │     │  GitHub webhook fires           │
+│  (~3 min interval)               │     │  → ArgoCD /api/webhook          │
+└────────────────────────────────┘▔▔     └────────────────────────────────┘▔▔
+              │                                    │
+              └──────────────┬─────────────────────┘
+                              ▼
+              ┌────────────────────────────────┐
+              │  ArgoCD detects drift            │▏   git's image tag ≠
+              │  (Application controller)         │▏   what's live in k3s
+              └────────────────────────────────┘▔▔
+                              │
+                              ▼
+              ┌────────────────────────────────┐     applied via ArgoCD's
+              │  ArgoCD applies the new manifest  │▏   in-cluster API access
+              └────────────────────────────────┘▔▔    (Application controller
+                              │                        runs as a pod on node 1)
+                              ▼
+              ┌────────────────────────────────┐     new asw-app pod comes
+              │  k3s schedules the new pod        │▏   up on node 2 (Stage 2's
+              │  (rolling update, old pod drains) │▏   workload node)
+              └────────────────────────────────┘▔▔
+                              │
+                              ▼
+              ┌────────────────────────────────┐     the actual proof —
+              │  DONE — zero manual steps         │▏   Stage 7's verification
+              └────────────────────────────────┘▔▔
+```
+
+The two things that make this loop closed rather than "mostly automatic":
+tagging with the commit SHA (so there's always a real diff for ArgoCD to
+find) and the CI job's own write-back permission (so the tag bump lands in
+git without a human touching `k8s/deployment.yaml`). Miss either one and
+the pipeline silently stalls at "image pushed, nothing deployed."
 
 ---
 
