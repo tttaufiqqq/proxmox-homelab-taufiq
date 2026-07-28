@@ -176,6 +176,21 @@ finishing a real gap, not tidying up something that already works:
       create a machine end-to-end without any GUI step at all — Terraform
       itself now manages every real machine that's supposed to be managed.
       Full story: `docs/19-devops-practice/12-terraform-full-fleet-import.md`
+- [x] **Extended once more, 2026-07-28**: the fleet import above only ever
+      *adopted* CTs, never created one from scratch — Terraform had never
+      actually built a CT the way it had already proven for VMs. Added 2
+      disposable test CTs to the test loop, proved creation works, and
+      pushed the proof all the way through to a real Ansible handoff (not
+      just "the machine boots"). Real infra was intentionally stopped
+      first to make room, and every test machine was collapsed back down
+      once the loop was verified, same discipline as the very first proof.
+      Found and fixed 8 real bugs along the way, from a Proxmox lock
+      timeout to Ansible/WSL environment quirks to a playbook assumption
+      that only breaks against a genuinely fresh clone of an existing
+      role. All 5 DB hosts came up fully working; `app-server` got to the
+      one deliberate boundary (a real public domain) that shouldn't be
+      faked. Full story:
+      `docs/19-devops-practice/13-terraform-ct-creation-and-full-loop-proof.md`
 
 **Capacity note:** `vms.tf` configures all 4 test VMs at 2048 MB each — booting
 them all at once is another ~8 GB on top of the ~17.9 GB already allocated to

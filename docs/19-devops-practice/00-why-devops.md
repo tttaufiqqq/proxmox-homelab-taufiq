@@ -48,3 +48,4 @@ happened in.
 | 10 | [Azure: Functions reading Vault through Tailscale Funnel](10-azure-functions-vault-tailscale-funnel.md) | Stage 8, Step 3 |
 | 11 | [Azure: Terraform talking to a second provider](11-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
 | 12 | [Terraform: bringing the rest of the fleet in](12-terraform-full-fleet-import.md) | Stage 1 (continued again) |
+| 13 | [Terraform: proving CT creation, and the full loop end to end](13-terraform-ct-creation-and-full-loop-proof.md) | Stage 1 (continued once more) |
