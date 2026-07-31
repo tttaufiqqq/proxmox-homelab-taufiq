@@ -3,8 +3,9 @@
 *.iml
 
 # Session handoff notes — local working memory between Claude Code sessions,
-# never meant for GitHub
-handoff.md
+# never meant for GitHub. Rotated into numbered files inside handoffs/ once
+# the current one gets too large — see CLAUDE.md's convention.
+handoffs/
 
 # Claude Code project instructions — local-only, never pushed to GitHub
 CLAUDE.md

@@ -328,6 +328,51 @@ project ever attempted:
   and patches `ansible_host` values directly into
   `.scratch-inventory-test-loop.yml`.
 
+**How it works, and which pain point each stage solves:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│              provision-test-loop.sh — WHAT IT ACTUALLY DOES          │
+│   every stage below automates a step that was done by hand first,    │
+│   and broke at least once doing it that way                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────┐     Proxmox reachable? state backend
+  │ 0. Preflight           │▏    up? enough RAM? running from WSL
+  └──────┬────────────────┘▔▔    native, not /mnt/c? — solves: every
+         │                        silent-failure surprise hit this session
+         ▼
+  ┌──────────────────────┐     terraform apply -target="module.vm"
+  │ 1. Apply the 4 VMs     │▏    (alone, first)
+  └──────┬────────────────┘▔▔
+         │
+         ▼
+  ┌──────────────────────┐     a SEPARATE apply command — solves:
+  │ 2. Apply the 2 CTs     │▏    the Proxmox lock-timeout bug from
+  └──────┬────────────────┘▔▔    applying VMs + CTs together
+         │
+         ▼
+  ┌──────────────────────┐     TUN device fix, reboot, install,
+  │ 3. CT Tailscale bridge │▏    join — idempotent, skips if already
+  └──────┬────────────────┘▔▔    done — solves: CTs have no cloud-init
+         │                        equivalent, unlike the VMs
+         ▼
+  ┌──────────────────────┐     tailscale status --json, matched on
+  │ 4. Resolve real IPs    │▏    Online/LastSeen — solves: the "-N"
+  └──────┬────────────────┘▔▔    suffix collision from stale devices
+         │                        that made eyeballing the table unreliable
+         ▼
+  ┌──────────────────────┐     fresh secret_id generated every run,
+  │ 5. Vault credentials   │▏    never persisted — solves: having to
+  └──────┬────────────────┘▔▔    manually SSH + regenerate one by hand
+         │                        each time
+         ▼
+  ┌──────────────────────┐     runs from WSL's native filesystem,
+  │ 6. ansible-playbook    │▏    never /mnt/c — solves: ansible.cfg
+  └────────────────────────┘▔▔   being silently distrusted (roles_path,
+                                  remote_user, private_key_file all at once)
+```
+
 **Design decisions, and why:**
 - Bash for command orchestration (matches everything already proven by
   hand); Python only for the Tailscale-JSON-parsing + YAML-patching step,
@@ -351,6 +396,32 @@ project ever attempted:
 - Deliberately **not** automated: the capacity check prompts for
   confirmation rather than silently stopping production — that's a
   judgment call, not a mechanical step.
+
+**How it's actually been verified so far:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  AUTOMATION SCRIPT — VERIFICATION STATUS              │
+├─────────────────────────────────────────────────────────────────────┤
+│ [x] bash -n syntax check ................................ PASS      │
+│ [x] python3 -m py_compile ................................ PASS      │
+│ [x] resolve_tailscale_ips.py --check-only, run against       PASS    │
+│     real live `tailscale status --json` data ......                  │
+│     (correctly reported all 6 targets NOT FOUND, since               │
+│     no test resources existed at the time — proves the               │
+│     JSON parsing/matching logic, not a fake/mocked run)               │
+│ [ ] full script, start to finish, one real run .......... NOT YET    │
+│     — this is the honest next step, not assumed done                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Every individual *stage* the script automates (staged apply, the CT
+bridge, `tailscale status --json` resolution, fresh Vault credentials,
+the WSL-native Ansible handoff) has already been proven working by hand,
+repeatedly, across the iterations documented above — the script wires
+already-proven steps together, it doesn't invent new untested behavior.
+What hasn't been proven yet is the *orchestration itself* running
+unattended start to finish.
 
 ---
 
