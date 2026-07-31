@@ -404,6 +404,14 @@ project ever attempted:
   `-N` suffix collision correctly via `Online`/`LastSeen`, not a guess),
   and patches `ansible_host` values directly into
   `.scratch-inventory-test-loop.yml`.
+- `destroy-test-loop.sh` — the teardown counterpart: `terraform destroy`
+  on the 6 test-loop resources, then deletes every matching Tailscale
+  device via the Tailscale API (`resolve_tailscale_ips.py
+  --list-all-device-ids` finds current *and* stale `-N` leftovers).
+  `terraform destroy` alone never touches Tailscale at all — see the
+  `-N` suffix collision bug below — so without this step every recreate
+  after a destroy would immediately collide with its own stale device
+  again.
 
 **How it works, and which pain point each stage solves:**
 
@@ -473,6 +481,49 @@ project ever attempted:
 - Deliberately **not** automated: the capacity check prompts for
   confirmation rather than silently stopping production — that's a
   judgment call, not a mechanical step.
+- A spinner + elapsed-timer wraps every stage that goes genuinely silent
+  for minutes at a time (both `terraform apply`s, the CT boot-wait loop) —
+  a real percentage isn't available since neither tool exposes a
+  completion fraction, so proof-of-life plus elapsed time is the honest
+  substitute. `ansible-playbook` is deliberately left unwrapped since it
+  already streams per-task output live, strictly better feedback than a
+  spinner would add.
+
+### Running it
+
+**To provision the test loop** (must run from a WSL-native directory, not
+`/mnt/c` — the preflight check rejects that, see the Ansible/environment
+section above):
+```bash
+cd ~
+AWS_ACCESS_KEY_ID=terraform-asw AWS_SECRET_ACCESS_KEY=<the bucket-scoped secret> \
+  /mnt/c/Users/taufi/Documents/Dev/Animal-Shelter-Workshop/infrastructure/provision-test-loop.sh
+```
+
+![The spinner mid-stage during terraform apply, showing elapsed time while otherwise-silent Proxmox provisioning is underway](images/stage1-automation-script-spinner-vm-apply.png)
+
+![Proxmox's own tree view after a successful run: all 6 test-loop resources alive alongside the real production fleet — the 4 VMs (201/204/205/206) and 2 CTs (207/208)](images/stage1-automation-script-full-run-proxmox-tree.png)
+
+![ansible-playbook running against the freshly-provisioned test loop, streaming per-task output live once the Vault handoff completes](images/stage1-automation-script-ansible-run-in-progress.png)
+
+![The final play recap: all 5 DB hosts with zero real failures, app-server stopping right at the deliberate app_domain boundary as designed](images/stage1-automation-script-full-run-play-recap.png)
+
+**To tear it back down** — `terraform destroy` alone is not enough, since
+it never deregisters a machine from Tailscale (see the `-N` suffix
+collision bug below); `destroy-test-loop.sh` does both halves:
+```bash
+cd ~
+AWS_ACCESS_KEY_ID=terraform-asw AWS_SECRET_ACCESS_KEY=<the bucket-scoped secret> \
+  TAILSCALE_API_KEY=<a Tailscale API access token, generated at
+  https://login.tailscale.com/admin/settings/keys — a different
+  credential class from the reusable device-join authkey> \
+  /mnt/c/Users/taufi/Documents/Dev/Animal-Shelter-Workshop/infrastructure/destroy-test-loop.sh
+```
+It runs `terraform destroy` scoped to exactly the 6 test-loop resources,
+then calls `resolve_tailscale_ips.py --list-all-device-ids` (current *and*
+stale `-N` leftovers) and `DELETE`s each one through the Tailscale API —
+so the next provision run starts from zero instead of colliding with its
+own leftovers.
 
 **How it's actually been verified so far:**
 
@@ -487,18 +538,28 @@ project ever attempted:
 │     (correctly reported all 6 targets NOT FOUND, since               │
 │     no test resources existed at the time — proves the               │
 │     JSON parsing/matching logic, not a fake/mocked run)               │
-│ [ ] full script, start to finish, one real run .......... NOT YET    │
-│     — this is the honest next step, not assumed done                 │
+│ [x] full script, start to finish, one real run ........... PASS      │
+│     (2026-08-01) — see screenshots above; first attempt hit a real   │
+│     bug (below), fixed, this run is the one that proved the fix      │
+│ [x] destroy-test-loop.sh, full teardown of that same run .. PASS     │
+│     — all 6 Proxmox resources + all 6 Tailscale devices gone         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 Every individual *stage* the script automates (staged apply, the CT
 bridge, `tailscale status --json` resolution, fresh Vault credentials,
-the WSL-native Ansible handoff) has already been proven working by hand,
-repeatedly, across the iterations documented above — the script wires
-already-proven steps together, it doesn't invent new untested behavior.
-What hasn't been proven yet is the *orchestration itself* running
-unattended start to finish.
+the WSL-native Ansible handoff) had already been proven working by hand,
+repeatedly, across the iterations documented above, before the script
+itself ever ran unattended start to finish. The first real unattended run
+did surface one genuine bug the manual runs never hit: `resolve_current_ip()`
+let `test-mysql`'s own "-N suffix" regex swallow `test-mysql-2` (a
+different, intentionally-named host, not a stale suffix of the first one),
+sending the `linux-mysql` Ansible play to the wrong box and failing SSH
+auth (`Permission denied` — the CT only has `root`, not the VM's
+cloud-init `workshop` user). Fixed by excluding any hostname that's itself
+one of the other reserved target names from being treated as a collision
+candidate. The run captured in the screenshots above is the one that
+proved the fix, end to end, for real.
 
 ---
 
@@ -516,12 +577,16 @@ unattended start to finish.
   `file_format` and CT schema fixes.
 - `terraform plan` shows `0 to change, 0 to destroy` on every real
   resource in both Terraform configs (ASW's 8, the homelab repo's 4).
-- The automation script: both files pass syntax validation (`bash -n`,
-  `python3 -m py_compile`), and `resolve_tailscale_ips.py` was
-  smoke-tested against real, live `tailscale status --json` output
-  (correctly reported all 6 targets as not-found, since no test resources
-  existed at the time). **The full script has not yet been run start to
-  finish** — that's the natural next step before trusting it unattended.
+- The automation script: all three files pass syntax validation (`bash -n`,
+  `python3 -m py_compile`), and `provision-test-loop.sh` has now been run
+  unattended, start to finish, for real (2026-08-01) — 4 VMs + 2 CTs
+  provisioned, the CT Tailscale bridge applied, all 6 hosts resolved and
+  patched into the inventory, and the Ansible handoff completed with the
+  same "5 DB hosts zero failures, app-server stops at the deliberate
+  `app_domain` boundary" result documented above. `destroy-test-loop.sh`
+  then tore the same run back down completely — all 6 Proxmox resources
+  and all 6 Tailscale devices gone, verified against both `qm list`/
+  `pct list` and the Tailscale admin console directly.
 - Everything collapsed after every proof: test resources destroyed,
   `linux-vault` stopped back down, host capacity back to baseline. None of
   this was ever meant to be a second permanent environment.
@@ -533,6 +598,7 @@ unattended start to finish.
 | Piece | Path |
 |---|---|
 | Automation script | `Animal-Shelter-Workshop/infrastructure/provision-test-loop.sh` |
+| Teardown script | `Animal-Shelter-Workshop/infrastructure/destroy-test-loop.sh` |
 | Tailscale IP resolver | `Animal-Shelter-Workshop/infrastructure/resolve_tailscale_ips.py` |
 | Test-loop inventory (gitignored) | `Animal-Shelter-Workshop/infrastructure/ansible/.scratch-inventory-test-loop.yml` |
 | Disposable test loop + 2 test CTs | `Animal-Shelter-Workshop/infrastructure/terraform/vms.tf` |
