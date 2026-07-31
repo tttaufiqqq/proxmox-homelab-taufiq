@@ -1,5 +1,18 @@
 # Why This Series Exists
 
+![The DevOps infinity loop: Plan, Code, Build, Test, Release, Deploy, Operate, Monitor, ringed by the practice categories that feed each phase](images/00-devops-infinity-loop.png)
+
+The classic devops "infinity loop" above is what this whole series is
+structured around, even though nobody handed me this diagram before I
+started. Dev-side phases (Plan, Code, Build, Test) sit on the left half,
+ops-side phases (Release, Deploy, Operate, Monitor) on the right, and each
+phase is fed by the ring of practice categories around the outside — Source
+Code and Version Control into Code; Development and Automation into Build;
+Quality Control into Test; CI/CD into Release; Infrastructure as Code,
+Provisioning, and Configuration Management into Deploy; Virtualisation and
+Containerisation into Operate; Visualizations and Logging into Monitor. The
+table further down maps every doc in this series onto that loop.
+
 - I was drawn to devops, and I want to break into it.
 - Not just read about Terraform and Kubernetes, but actually run them
   against something real until they break and I have to fix them.
@@ -53,3 +66,26 @@ docs that are now folded into it rather than kept as separate reading.
 | 10 | [Azure: Terraform talking to a second provider](10-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
 | 11 | [Terraform: bringing the rest of the fleet in](11-terraform-full-fleet-import.md) | Stage 1 (continued again) — full narrative detail behind doc 01 |
 | 12 | [Terraform: proving CT creation, and the full loop end to end](12-terraform-ct-creation-and-full-loop-proof.md) | Stage 1 (continued once more) — full narrative detail behind doc 01 |
+
+## Where each doc sits on the loop
+
+Mapping the table above onto the infographic at the top — same eight
+phases, same ring of practice categories, just with this series' actual
+docs slotted into each one instead of generic labels:
+
+| Loop phase | Practice categories | Covered by |
+|---|---|---|
+| Plan | — | `plans/02-devops-practice-plan (executed).md`, this doc |
+| Code | Source Code, Version Control | Animal Shelter Workshop itself (the target app); every doc's git history |
+| Build | Development, Automation | 01/11/12 (Terraform automation scripts), 04 (Docker multi-stage build) |
+| Test | Quality Control | 02 (Molecule), 03 (per-connection smoke test) |
+| Release | CI/CD | 03 (GitHub Actions pipeline, drift check) |
+| Deploy | Infrastructure as Code, Provisioning, Configuration Management | 01/11/12 (Terraform), 02 (Ansible), 08-10 (Azure IaC stretch) |
+| Operate | Virtualisation, Containerisation | 04 (Docker), 05 (k3s), 07 (GitOps/ArgoCD) |
+| Monitor | Visualizations, Logging | 06 (Prometheus, Grafana, Loki, Alertmanager) |
+
+A few docs straddle more than one phase on purpose — 07's GitOps auto-sync
+is both a Deploy mechanism and an Operate-time drift guard, and the
+Terraform docs (01/11/12) span Build (the automation around `apply`) and
+Deploy (the actual provisioning) rather than fitting one box cleanly. The
+loop is a simplification; the real work never lines up quite that neatly.
