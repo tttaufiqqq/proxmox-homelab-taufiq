@@ -12,8 +12,8 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
 
 ## Why I built this
 
-- `01-terraform-first-real-loop.md` proved Terraform could create a VM from
-  scratch, but never proved it could create a **CT** from scratch.
+- Doc `01` covers proving Terraform could create a VM from scratch, but
+  never proved it could create a **CT** from scratch.
 - Every real CT this project manages (`linux-mysql-2`, `linux-mariadb-2`,
   `linux-vault`, `linux-gh-runner`) was adopted via `terraform import`,
   hand-built first.
@@ -108,7 +108,7 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
   diff that persisted identically even after applying it — Proxmox's
   clone operation doesn't preserve that attribute the way a fresh disk
   creation does.
-- Same category as `02`'s `operating_system.template_file_id` lesson for
+- Same category as `01`'s `operating_system.template_file_id` lesson for
   CTs.
 - Fixed properly with `disk[0].file_format` added to `modules/proxmox-vm`'s
   `ignore_changes`, not by repeatedly applying.
@@ -290,4 +290,4 @@ revealed a genuinely un-fixable-by-updating attribute.**
 | The 2 new test CTs | `infrastructure/terraform/vms.tf` |
 | Cloned-disk `file_format` fix | `infrastructure/terraform/modules/proxmox-vm/main.tf` |
 | Test-loop inventory (gitignored) | `infrastructure/ansible/.scratch-inventory-test-loop.yml` |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/13-terraform-ct-creation-and-full-loop-proof.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/12-terraform-ct-creation-and-full-loop-proof.md` (homelab meta-repo) |

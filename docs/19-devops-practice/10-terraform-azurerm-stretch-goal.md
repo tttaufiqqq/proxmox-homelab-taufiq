@@ -163,7 +163,7 @@ false
 |---|---|
 | Terraform config | `Animal-Shelter-Workshop/infrastructure/terraform-azure/` (`main.tf`, `variables.tf`, `vm.tf`, `outputs.tf`) |
 | Example vars | `terraform.tfvars.example` (committed); real `terraform.tfvars` gitignored |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/11-terraform-azurerm-stretch-goal.md` |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/10-terraform-azurerm-stretch-goal.md` |
 
 - Nothing Azure-side remains from this step — the resource group, VM, and
   Service Principal were all destroyed/deleted in this same session.

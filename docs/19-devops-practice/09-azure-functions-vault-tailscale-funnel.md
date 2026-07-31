@@ -224,7 +224,7 @@ curl https://asw-vault-demo-func.azurewebsites.net/api/VaultDemo
 | Function App | `asw-vault-demo-func`, resource group `homelab-stage8`, Consumption plan, Node 22 Linux |
 | Backing storage account | `aswfuncstaufiq` (`homelab-stage8`) |
 | Function source | Local-only scratch project (not committed to any repo, this is a throwaway proof, not a maintained app) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/10-azure-functions-vault-tailscale-funnel.md` |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/09-azure-functions-vault-tailscale-funnel.md` |
 
 ## Not yet done
 

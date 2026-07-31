@@ -371,7 +371,7 @@ STAGE 4 (docker-compose, all local)          STAGE 5 (k3s, opening move)
 | Compose file | `docker-compose.yml` (repo root) |
 | Build-context excludes | `.dockerignore` |
 | Registry | `docker.io/tttaufiqqq/animal-shelter-workshop` (`v1.0.0`, `latest`) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/05-docker-multi-stage-build-and-compose.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/04-docker-multi-stage-build-and-compose.md` (homelab meta-repo) |
 
 ### Screenshots
 

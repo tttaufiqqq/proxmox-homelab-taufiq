@@ -221,4 +221,4 @@ mysqldump: workshop_2_prod has insufficient privileges to SHOW CREATE PROCEDURE 
 | Routine-grant fix (all 4 DB playbooks) | `infrastructure/ansible/playbooks/linux-{mysql,mysql-2,mariadb,mariadb-2}.yml` |
 | Vault secret (2 new fields on the existing path) | `secret/animal-shelter-workshop` (`azure_backup_sas_token`, `azure_backup_container_url`) |
 | Azure resources | Resource group `homelab-stage8`; Storage Account `aswbackupstaufiq`; container `backups`; budget `homelab-stage8-guardrail` |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/09-azure-cloud-backup-sync.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/08-azure-cloud-backup-sync.md` (homelab meta-repo) |

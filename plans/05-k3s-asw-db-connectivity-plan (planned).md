@@ -5,7 +5,7 @@ Stage 5 of `devops-practice-plan.md`) to the real 5-connection database
 fleet, replacing the current `DB_CONNECTION=sqlite` placeholder in
 `asw-app-config`. This is the "later, harder step" both Stage 5's and
 Stage 4's writeups explicitly deferred — see
-`docs/19-devops-practice/06-k3s-single-node-deployment-and-vault-injector.md`'s
+`docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md`'s
 own "What carries forward" section: *"Wiring the app's actual 5-connection
 DB credentials through the injector is future work, not done here."*
 

@@ -6,7 +6,7 @@
 
 - The devops practice series (`docs/19-devops-practice/`) proved and then extended Terraform inside `Animal-Shelter-Workshop`'s own repo.
 - Its plan states outright — **"Scope: Animal Shelter Workshop only"** — every stage targets that one project and the infrastructure that serves it.
-- Importing the *entire* live Proxmox fleet into that same Terraform (see `docs/19-devops-practice/12`) quietly broke that boundary:
+- Importing the *entire* live Proxmox fleet into that same Terraform (see `docs/19-devops-practice/11`) quietly broke that boundary:
   - `linux-mini-io`, `linux-k3s`, `linux-mongodb`, and `linux-observability` aren't ASW-specific at all.
   - `linux-observability` monitors all 12 live hosts fleet-wide, not just ASW's.
   - `linux-mini-io` is general-purpose S3 storage that also backs `Library-System-EDP` (per this repo's own `README.md`), and now hosts Terraform's own state backend on top of that.
@@ -23,7 +23,7 @@
   - `linux-mini-io` (VM 109), `linux-k3s` (CT 100), `linux-mongodb` (CT 108), and `linux-observability` (CT 114).
   - 4 resources.
 - **Deliberately outside Terraform everywhere:**
-  - `opnsense` (the network's actual gateway) and the stopped legacy VMs (102/103/107, template 9000) — unchanged from `docs/19-devops-practice/12`'s original exclusions.
+  - `opnsense` (the network's actual gateway) and the stopped legacy VMs (102/103/107, template 9000) — unchanged from `docs/19-devops-practice/11`'s original exclusions.
 
 ## How the move actually worked
 
@@ -68,7 +68,7 @@
 
 - `qm config 109` (`linux-mini-io`) and `pct config 100`/`108`/`114`
   (`linux-k3s`/`linux-mongodb`/`linux-observability`) byte-identical
-  before vs. after the move, same discipline as `docs/19-devops-practice/12`.
+  before vs. after the move, same discipline as `docs/19-devops-practice/11`.
 - New repo's `terraform state list`: exactly 4 resources.
 - ASW's `terraform state list`: exactly 8 resources — the 4 moved ones
   gone, nothing else touched.

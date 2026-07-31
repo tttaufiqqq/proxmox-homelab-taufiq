@@ -157,7 +157,7 @@ g_vfs_done(): iso9660/OPNSENSE_INSTALL[READ(offset=...,length=2048)]error = 5
 ## VLAN 80 Activation — 26 July 2026 (Stage 6, Observability)
 
 - Reserved since this plan's original build, VLAN 80 finally got a real guest — `linux-observability` (CT 114, Prometheus/Grafana/Loki/Alertmanager) — as part of `devops-practice-plan.md`'s Stage 6.
-- Full stage write-up: [`docs/19-devops-practice/07-observability-prometheus-grafana-loki-alertmanager.md`](../devops-plan/07-observability-prometheus-grafana-loki-alertmanager.md).
+- Full stage write-up: [`docs/19-devops-practice/06-observability-prometheus-grafana-loki-alertmanager.md`](../devops-plan/06-observability-prometheus-grafana-loki-alertmanager.md).
 - This section is specifically the VLAN/firewall side of that work.
 
 **Broke:**

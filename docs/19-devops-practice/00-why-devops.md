@@ -21,8 +21,6 @@
   public cloud stretch goal) with Claude's help, working through it stage
   by stage.
 
-![Terraform, Proxmox, and Ansible pipeline: Terraform defines each machine's spec and sends API calls to Proxmox, Proxmox creates the VMs/CTs, then once a machine boots and joins Tailscale, Ansible SSHes in to install the DBMS, PHP, and dependencies](images/terraform-proxmox-ansible-pipeline.png)
-
 - The plan itself lives in `plans/02-devops-practice-plan (executed).md`.
 - This series is the writeup of actually doing it, stage by stage, in plan
   order, each doc written the same way every other doc in this repo is:
@@ -35,18 +33,23 @@
 
 ## What's in this series
 
+Doc `01` covers the whole Terraform/IaC journey (Stage 1, in all its
+iterations) — what was built, why, what broke, how it was found, and how
+it was recovered, all in one place. Read that one first. Its full
+narrative detail, stage by stage, previously lived across four separate
+docs that are now folded into it rather than kept as separate reading.
+
 | # | Doc | Stage |
 |---|---|---|
-| 01 | [Terraform: proving the base loop](01-terraform-first-real-loop.md) | Stage 1 |
-| 02 | [Terraform: state backend, container import, module](02-terraform-state-import-and-module.md) | Stage 1 (continued) |
-| 03 | [Ansible: roles, idempotency, Molecule, fleet expansion](03-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md) | Stage 2 |
-| 04 | [CI/CD: per-connection smoke test, pre-deploy backup, drift check](04-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md) | Stage 3 |
-| 05 | [Docker: multi-stage build and compose](05-docker-multi-stage-build-and-compose.md) | Stage 4 |
-| 06 | [k3s: single-node deployment and Vault injector](06-k3s-single-node-deployment-and-vault-injector.md) | Stage 5 |
-| 07 | [Observability: Prometheus, Grafana, Loki, Alertmanager](07-observability-prometheus-grafana-loki-alertmanager.md) | Stage 6 |
-| 08 | [GitOps: ArgoCD auto-sync and drift-revert](08-gitops-argocd-auto-sync-and-drift-revert.md) | Stage 7 |
-| 09 | [Azure: offsite backup sync and budget guardrail](09-azure-cloud-backup-sync.md) | Stage 8, Steps 1-2 |
-| 10 | [Azure: Functions reading Vault through Tailscale Funnel](10-azure-functions-vault-tailscale-funnel.md) | Stage 8, Step 3 |
-| 11 | [Azure: Terraform talking to a second provider](11-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
-| 12 | [Terraform: bringing the rest of the fleet in](12-terraform-full-fleet-import.md) | Stage 1 (continued again) |
-| 13 | [Terraform: proving CT creation, and the full loop end to end](13-terraform-ct-creation-and-full-loop-proof.md) | Stage 1 (continued once more) |
+| 01 | [Terraform: VM/CT creation, fleet import, and pipeline automation](01-terraform-vm-ct-creation-fleet-import-and-automation.md) | Stage 1, all iterations |
+| 02 | [Ansible: roles, idempotency, Molecule, fleet expansion](02-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md) | Stage 2 |
+| 03 | [CI/CD: per-connection smoke test, pre-deploy backup, drift check](03-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md) | Stage 3 |
+| 04 | [Docker: multi-stage build and compose](04-docker-multi-stage-build-and-compose.md) | Stage 4 |
+| 05 | [k3s: single-node deployment and Vault injector](05-k3s-single-node-deployment-and-vault-injector.md) | Stage 5 |
+| 06 | [Observability: Prometheus, Grafana, Loki, Alertmanager](06-observability-prometheus-grafana-loki-alertmanager.md) | Stage 6 |
+| 07 | [GitOps: ArgoCD auto-sync and drift-revert](07-gitops-argocd-auto-sync-and-drift-revert.md) | Stage 7 |
+| 08 | [Azure: offsite backup sync and budget guardrail](08-azure-cloud-backup-sync.md) | Stage 8, Steps 1-2 |
+| 09 | [Azure: Functions reading Vault through Tailscale Funnel](09-azure-functions-vault-tailscale-funnel.md) | Stage 8, Step 3 |
+| 10 | [Azure: Terraform talking to a second provider](10-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
+| 11 | [Terraform: bringing the rest of the fleet in](11-terraform-full-fleet-import.md) | Stage 1 (continued again) — full narrative detail behind doc 01 |
+| 12 | [Terraform: proving CT creation, and the full loop end to end](12-terraform-ct-creation-and-full-loop-proof.md) | Stage 1 (continued once more) — full narrative detail behind doc 01 |

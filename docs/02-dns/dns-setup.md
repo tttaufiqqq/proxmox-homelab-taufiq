@@ -1322,7 +1322,7 @@ This is a local `~/.ssh/config` change only, not part of this git repo — this 
 
 Prompted directly by a request to make sure every VM/CT has both DNS and an
 SSH alias, at the end of the same session that built Stage 6
-(`docs/19-devops-practice/07-observability-prometheus-grafana-loki-alertmanager.md`).
+(`docs/19-devops-practice/06-observability-prometheus-grafana-loki-alertmanager.md`).
 Re-ran §12's method once more: `pct list`/`qm list` on Proxmox compared
 against the live `/etc/dnsmasq.conf` and `~/.ssh/config`, both read live.
 
@@ -1410,7 +1410,7 @@ same VM 101, per §15's finding that VM 101 answers to both `app-server` and
 
 Repeatedly hit transient `ssh: Could not resolve hostname proxmox.taufiq.lab: No such host is
 known` failures while running the Terraform/Ansible test-loop work
-(`docs/19-devops-practice/13-terraform-ct-creation-and-full-loop-proof.md`) — the DNS chain
+(`docs/19-devops-practice/12-terraform-ct-creation-and-full-loop-proof.md`) — the DNS chain
 (dnsmasq + Tailscale Split DNS) flaked intermittently. Retrying usually worked, but it kept
 interrupting live command sequences. Since SSH connects by IP exactly as well as by name, and
 every alias already listed its Tailscale IP as a second `Host` pattern anyway (just never used
@@ -1427,7 +1427,7 @@ attempt, at a point where the same alias had failed to resolve via DNS moments e
 **Is this safe long-term?** Yes, for every host in this config — all of them are stable,
 always-there guests (VMs/CTs that don't get destroyed and recreated), and Tailscale IPs are
 stable once a device has joined the tailnet. This would *not* be safe for the disposable
-Terraform test-loop machines (`test-mysql`, etc., from `docs/19-devops-practice/13`) — those
+Terraform test-loop machines (`test-mysql`, etc., from `docs/19-devops-practice/12`) — those
 get a genuinely new IP every time they're recreated, so hardcoding them would break on the very
 next cycle. None of those have (or should have) a permanent `~/.ssh/config` entry at all, for
 exactly this reason.

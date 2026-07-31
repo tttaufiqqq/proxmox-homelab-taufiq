@@ -368,4 +368,4 @@ ssh linux-mongodb "systemctl is-active mongod && sudo ss -tlnp | grep 27017"
 | New homelab-host playbooks | `infrastructure/ansible/playbooks/linux-{vault,gh-runner,mini-io,mongodb}.yml` |
 | New inventory groups | `infrastructure/ansible/inventory.yml`, `inventory-ip.yml` (`homelab_hosts` and its 4 children) |
 | `ansible.cfg` change | `roles_path = ./roles` added |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/03-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/02-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md` (homelab meta-repo) |

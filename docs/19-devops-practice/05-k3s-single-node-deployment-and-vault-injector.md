@@ -519,7 +519,7 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
 | k3s CT | Proxmox CT 100, `linux-k3s`, Tailscale `100.109.241.125` |
 | k3s extra TLS SAN | `/etc/rancher/k3s/config.yaml` (inside CT 100) |
 | Vault kubernetes auth config | `linux-vault`, `auth/kubernetes/*` (live Vault API, not in git) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/06-k3s-single-node-deployment-and-vault-injector.md` |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md` |
 
 ### Screenshots
 

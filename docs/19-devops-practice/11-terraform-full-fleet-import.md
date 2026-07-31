@@ -12,9 +12,9 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
 
 ## Why I built this
 
-- `01-terraform-first-real-loop.md` and `02-terraform-state-import-and-module.md`
-  proved the Terraform loop once (a disposable test set, VMs 201/204/205/206,
-  torn down right after) and adopted two hand-built LXCs
+- Doc `01` (this series' consolidated overview doc) covers proving the
+  Terraform loop once (a disposable test set, VMs 201/204/205/206, torn
+  down right after) and adopting two hand-built LXCs
   (`linux-mysql-2`/`linux-mariadb-2`) into state.
 - Everything else the homelab actually runs in production was still
   hand-configured outside Terraform — `app-server` and the other three
@@ -86,7 +86,7 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
 **Two containers were genuinely powered off.**
 - `linux-k3s` (100) and `linux-mongodb` (108) were stopped at import time —
   not part of the always-on core fleet.
-- Unlike the CT import in `02` (both hosts there were running),
+- Unlike the CT import in `01` (both hosts there were running),
   `started = false` had to be declared explicitly for these two so `apply`
   wouldn't boot them as a side effect of being adopted.
 
@@ -116,7 +116,7 @@ practice plan it's a stage of, see `devops-practice-plan.md`, Stage 1)
   `"virtio-scsi-single"`.
 
 **`cdrom` can never be read back on import.**
-- Same category as `02`'s `operating_system.template_file_id` lesson for
+- Same category as `01`'s `operating_system.template_file_id` lesson for
   CTs — Proxmox doesn't persist it in a form the provider's read populates
   into state, so it shows as an "add" on the very first `plan` after import,
   regardless of whether it matches reality.
@@ -154,7 +154,7 @@ bug.**
 - `terraform plan` (full, unfiltered) shows `0 to change, 0 to destroy` on
   every one of those 10 hosts; the only remaining action is the disposable
   test loop's `8 to add` (4 VMs + 4 cloud-init snippets) — expected and
-  inert, since that loop was never meant to persist in state (see `02`).
+  inert, since that loop was never meant to persist in state (see `01`).
 - `linux-vault`: confirmed `vault status` showed `Sealed: false` immediately
   before *and* immediately after its own import — the most critical host in
   this batch, imported last among the CTs deliberately.
@@ -177,7 +177,7 @@ bug.**
 | Updated Terraform docs (full host table, new lessons learned) | `docs/07-terraform.md` |
 | Stale "hand-configured box" line corrected | `docs/09-production-hardening.md` |
 | Server Topology table, Terraform-managed column added | `CLAUDE.md` (gitignored) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/12-terraform-full-fleet-import.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/11-terraform-full-fleet-import.md` (homelab meta-repo) |
 
 ## What happened to the scratch resources
 
@@ -186,4 +186,4 @@ bug.**
   above before touching anything real.
 - Both destroyed (`pct destroy 199` / `qm destroy 198`) immediately after
   their dry runs confirmed zero drift — same "never experiment on
-  production" discipline `02` established for the container import.
+  production" discipline `01` established for the container import.
