@@ -115,6 +115,83 @@ touches Ansible.
 - Deliberately outside Terraform everywhere: `opnsense` (the network's
   actual gateway) and the stopped legacy VMs (102/103/107, template 9000).
 
+### Terraform's state backend: why MinIO, and the exact commands
+
+Terraform needs somewhere to persist a `.tfstate` file — the record of
+which resource address maps to which real Proxmox VMID, and what its
+last-applied config looked like, so `plan`/`apply` know what "no change"
+means without re-reading every field from Proxmox's own API as ground
+truth on every run. The default is a local file next to the `.tf` files,
+fine for a single-machine, single-person setup, but not what real
+Terraform usage looks like — production setups almost always use a
+remote, lockable backend instead. Since practicing the real thing was the
+whole point of this stage, it uses this homelab's own self-hosted MinIO
+(`linux-mini-io`, already running general-purpose S3 storage for
+`Library-System-EDP`) as an S3-compatible remote backend instead of a
+local file — same protocol, same locking semantics as a real cloud setup,
+without paying for one.
+
+**One-time setup, run on `linux-mini-io` itself:**
+```bash
+# A bucket dedicated to this one state file — never share a bucket
+# between unrelated Terraform configs; a state mistake in one becomes a
+# corruption risk to the other.
+mc mb local/animal-shelter-workshop-tfstate
+
+# A bucket-scoped credential, not the MinIO root account — same
+# "scope the credential, not just the network" principle used everywhere
+# else in this homelab (the Azure backup SAS token, the Vault AppRole
+# secret_id). If this leaks, it can only touch this one bucket.
+mc admin user add local terraform-asw <secret key>
+
+# A policy granting exactly get/put/list/delete on that one bucket,
+# nothing else in the MinIO instance, then attach it to the user.
+mc admin policy create local terraform-asw-tfstate policy.json
+mc admin policy attach local terraform-asw-tfstate --user terraform-asw
+```
+
+**In `main.tf`, read on every `init`:**
+```hcl
+backend "s3" {
+  bucket = "animal-shelter-workshop-tfstate"
+  key    = "terraform.tfstate"
+  region = "us-east-1"   # required by the backend, meaningless to MinIO
+
+  endpoints = {
+    s3 = "http://100.73.172.85:9000"   # linux-mini-io, Tailscale IP
+  }
+
+  use_path_style              = true   # MinIO doesn't do virtual-hosted-style buckets
+  skip_credentials_validation = true
+  skip_region_validation      = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+  skip_s3_checksum            = true
+}
+```
+Terraform's built-in `s3` backend talks to any S3-compatible endpoint, so
+pointing it at MinIO needs no extra plugin — just these MinIO-specific
+overrides so it stops assuming it's talking to real AWS (a real account
+ID, virtual-hosted-style bucket URLs, AWS's actual region list).
+
+**Every real run, before `terraform init`/`plan`/`apply`:**
+```bash
+export AWS_ACCESS_KEY_ID=terraform-asw
+export AWS_SECRET_ACCESS_KEY=<the bucket-scoped secret>
+
+terraform init    # downloads providers; opens the S3-backend connection to MinIO
+terraform plan    # reads current state from the MinIO bucket, diffs against .tf files
+terraform apply   # applies changes, then writes the new state back to MinIO,
+                   # holding a lock on it for the duration so a second
+                   # concurrent apply can't race and corrupt the file
+```
+The credential is passed as env vars only — never written into `main.tf`
+or committed in `terraform.tfvars` — the same "no hardcoded secrets" rule
+the automation script follows. `linux-mini-io` (VM 109) isn't part of the
+always-on core fleet, so `qm start 109` first if a fresh `terraform init`
+can't reach the backend at all — this is exactly the "very first proof"
+gotcha listed above, not a hypothetical.
+
 ---
 
 ## What broke, how I found it, and how I recovered
