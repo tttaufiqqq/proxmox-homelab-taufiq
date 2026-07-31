@@ -525,6 +525,8 @@ stale `-N` leftovers) and `DELETE`s each one through the Tailscale API —
 so the next provision run starts from zero instead of colliding with its
 own leftovers.
 
+![destroy-test-loop.sh tearing down the same run above: terraform destroy on the 6 test-loop resources, then all 6 matching Tailscale devices deleted one by one via the API](images/stage1-automation-script-destroy-run.png)
+
 **How it's actually been verified so far:**
 
 ```
