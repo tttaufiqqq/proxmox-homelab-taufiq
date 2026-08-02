@@ -158,6 +158,87 @@ curl -G http://100.77.185.81:3100/loki/api/v1/query_range \
 - Loki itself has no standalone UI — it's queried through Grafana's
   Explore view, not visited directly.
 
+**Reading logs in Grafana Explore, step by step:**
+
+1. Open Grafana, click **Explore** in the left sidebar, set the data
+   source dropdown to **Loki**.
+2. Build a query: in the **Builder** tab, pick a label (`pod`,
+   `container`, `namespace`, `host`) and value under **Label filters**,
+   or click **Label browser** for a visual picker of every label/value
+   combination. The **Code** tab takes a raw LogQL query directly, e.g.
+   `{container="app"}`.
+3. Check the **time range** picker (clock icon, top toolbar) — the
+   default range can easily not overlap with when the logs you want were
+   actually ingested, which looks identical to "no logs exist" if you're
+   not looking at it.
+4. Real, undiagnosed snag hit doing exactly this: `{container="app"}`
+   returned "No data" in the UI despite the same query returning real
+   results when hit directly against Grafana's own datasource-proxy API.
+   Purely a time-range default in Explore, not a backend/query problem —
+   widening the range to "Last 6 hours" immediately showed all 35 lines.
+
+![Grafana Explore showing real asw-app (php-fpm) log lines after widening the time range to Last 6 hours — the log volume histogram, the LogQL query {container="app"}, and 35 real log lines including startup notices and a few "unable to retrieve container logs" transient errors from pod restarts](images/plan07-grafana-explore-logs.png)
+
+![Same Explore view with the Fields sidebar open (cluster, container, instance, job, namespace, node, pod, service_name — every label Alloy attached), confirming the full label set is queryable, not just a raw text stream](images/plan07-grafana-explore-logs-with-fields.png)
+
+**Reading what the log lines actually say:**
+
+- This particular query (`{container="app"}`) surfaces php-fpm's own
+  request-access log, not Laravel's application log — every line is one
+  handled HTTP request, e.g.
+  `10.42.1.51 - 02/Aug/2026:12:40:38 +0000 "POST /index.php" 302`.
+- `10.42.1.51` isn't a real visitor's IP — it's `asw-nginx`'s own pod IP,
+  since traffic flows client → `cloudflared` → `asw-nginx` → php-fpm
+  (fastcgi), so every request looks like it's "from" nginx.
+- Every Laravel route ultimately goes through `public/index.php`, so
+  `"GET /index.php" 200` doesn't mean literally the homepage — it means
+  "a request was handled successfully."
+- To see Laravel's own application log instead (actual errors/exceptions,
+  not php-fpm's request log), filter further:
+  `{container="app"} |= "production."`.
+
+![Grafana Explore showing php-fpm's access log for asw-app: real GET/POST /index.php requests with status codes, source IP 10.42.1.51 (asw-nginx's pod IP, not a real visitor), captured live within minutes of the traffic actually happening](images/plan07-grafana-explore-fpm-access-log.png)
+
+## The pre-existing Fleet Overview dashboard, now covering k3s too
+
+- Stage 6 already had a "Fleet Overview - CPU/RAM/Disk" dashboard; the 3
+  k3s hosts never showed up on it before this session, since they never
+  had `node_exporter` running until now.
+- Real finding just from looking at it: `linux-gh-runner` was sitting at
+  **98.1%** disk usage, `linux-k3s` at 74.7% — both clearly the two
+  highest lines in the Disk Usage panel (a temptation to eyeball colors
+  against the legend and guess wrong — cross-checked against
+  Prometheus's own numbers directly instead of trusting the chart by
+  eye):
+
+```
+curl "http://100.77.185.81:9090/api/v1/query?query=100*(1-(node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"}/node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"}))"
+```
+
+| Host | Disk % |
+|---|---|
+| linux-gh-runner | 98.1% |
+| linux-k3s | 74.7% |
+| linux-k3s-3 | 56.8% |
+| linux-observability | 54.6% |
+| linux-mini-io | 53.0% |
+| linux-k3s-2 | 50.2% |
+| linux-vault | 30.2% |
+| linux-mysql-2 | 15.1% |
+| linux-mariadb-2 | 14.3% |
+
+- `linux-gh-runner`'s small disk (10GB) filling up from accumulated
+  Docker build cache during CI runs was already a known risk (flagged in
+  an earlier session's handoff notes) — this dashboard is what actually
+  caught it being real and current, not hypothetical, exactly the kind
+  of thing a fleet-wide dashboard is for.
+- CPU and memory, by contrast, looked healthy across the whole fleet:
+  10-20% baseline CPU with a few bursts to 40-45% (matching the soak
+  traffic / log-query activity happening at the time), memory flat and
+  low everywhere.
+
+![Fleet Overview dashboard's CPU/RAM/Disk panels for the last hour, now including linux-k3s/-2/-3 for the first time — CPU and memory healthy across the fleet, but Disk Usage clearly shows linux-gh-runner near 100% and linux-k3s near 75%, both real, both worth follow-up](images/plan07-grafana-fleet-overview-dashboard.png)
+
 ## Stopping the Telegram spam on planned shutdowns
 
 - The existing `InstanceDown` alert (`up{job="node"} == 0` for 2m+)
