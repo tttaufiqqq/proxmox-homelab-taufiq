@@ -343,7 +343,7 @@ curl http://100.109.241.125:30080/api/database-status
 - Local dev (`docker-compose.yml`) reaches the same 5 real databases too,
   but with a separate `workshop_2_dev` credential straight from a plain
   `.env` file, never Vault, never this Deployment's config. Full detail:
-  `docs/19-devops-practice/04-docker-multi-stage-build-and-compose.md`.
+  `docs/19-devops-practice/03-docker-multi-stage-build-and-compose.md`.
   The two paths are deliberately parallel and non-overlapping: dev
   credentials never touch k3s, prod credentials never touch
   `docker-compose.yml`.
@@ -572,8 +572,141 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
   `asw-app` role/ServiceAccount, both wired to the app's real config now
   (step 7 above), not just exploratory scaffolding.
 - Multi-node expansion and its downstream scheduling practice
-  (taints/tolerations/draining beyond what a single node can show) stay
-  blocked on a second physical Proxmox host, tracked, not forgotten.
+  (taints/tolerations/draining beyond what a single node can show) were
+  assumed blocked on a second physical Proxmox host at the time this was
+  written — turned out not to be the real constraint. See the
+  continuation below: a second CT on the *same* physical host, sized the
+  same way as this one, was all it took.
+
+## Continued: 2-node expansion, full GitOps automation, and the cloudflared migration
+
+`plans/06-k3s-multi-node-gitops-automation-plan.md`, executed
+2026-08-02, picked up exactly where the section above left off. What
+that plan built, in order:
+
+**1. A real second node, not a second physical host.** The assumption
+above (multi-node needs a second Proxmox host) didn't hold up once
+actually checked — `linux-k3s-2` (CT 118, 1 core/2GB, same "start small"
+sizing as CT 100 itself) joined as a plain `k3s agent` on the *same*
+Proxmox host, `kubelet-arg=feature-gates=KubeletInUserNamespace=true`
+carried over from CT 100's own fix (same unprivileged-LXC constraint,
+same workaround). `kubectl get nodes` showed 2 `Ready` nodes within
+minutes — the "needs a second physical box" note above was simply wrong,
+not yet re-examined.
+
+**2. `asw-app`'s app+nginx sidecar pair split into 2 real Deployments.**
+Up to this point `app` (php-fpm) and `nginx` shared one Pod, one node,
+talking over `localhost`. Splitting them onto separate nodes meant
+breaking that same-Pod assumption for real: `nginx`'s static assets
+(previously copied in by an initContainer into a shared `emptyDir`) got
+baked into `nginx`'s own image at build time instead (a new `nginx`
+Dockerfile stage, reusing the same Vite `frontend` build output the
+`runtime` stage already depended on), and `nginx`'s `fastcgi_pass`
+switched from `127.0.0.1:9000` to a real ClusterIP Service
+(`asw-app-internal`) reaching `asw-app` on the other node. `nodeSelector`
+pinned each Deployment explicitly, rather than trusting the scheduler to
+keep them apart.
+
+**3. A real cross-node failover test, not simulated on one node.**
+`kubectl delete pod` on an `asw-nginx` pod running on node 2 produced a
+replacement, still correctly pinned to node 2, within single-digit
+seconds — the real version of what the single-node section above could
+only simulate with taints.
+
+**4. The actual automation gap, closed.** `deploy.yml` used to only ever
+touch `app-server`; nothing rebuilt the app image or bumped
+`k8s/deployment.yaml` on a normal push. A new `build-and-push-k3s-images`
+job now builds **both** images (`asw-app`, `asw-nginx`) tagged with the
+commit SHA, pushes to Docker Hub, and commits the tag bump straight back
+into `k8s/*.yaml` — `[skip ci]` on that bump commit is what keeps it from
+re-triggering itself forever.
+
+**5. `cloudflared` migrated fully into the cluster.** A brand-new
+Cloudflare Tunnel (`k3s-asw-nginx`, deliberately separate from
+`app-server`'s original `animal-shelter-workshop` tunnel) was created
+first, its token stored in Vault (`cloudflare_tunnel_token`, same
+Agent-Injector pattern as the app's own DB credentials — never a
+committed k8s Secret), and proven end-to-end on a **temporary** hostname
+before touching real traffic:
+
+![Cloudflare "Route Traffic" wizard creating the k3s-asw-nginx tunnel's first published route: subdomain k3s-asw-nginx.tttaufiqqq.com, HTTP service pointed at the origin](images/plan06-cloudflare-tunnel-route-traffic-form.png)
+
+![Cloudflare Tunnels list showing the original animal-shelter-workshop tunnel Healthy (still serving from app-server at this point) alongside the brand-new k3s-asw-nginx tunnel, still Inactive since no connector had been deployed yet](images/plan06-cloudflare-tunnels-list.png)
+
+Once the `cloudflared` Deployment (its own ServiceAccount + Vault
+Kubernetes-auth role, scheduled onto node 2 alongside `asw-nginx`) landed
+via ArgoCD, the tunnel came up Healthy with 4 live QUIC connections:
+
+![k3s-asw-nginx tunnel's own overview page: Status Healthy, one Connector shown Connected, running cloudflared 2026.7.2 on linux_amd64](images/plan06-cloudflare-k3s-tunnel-connected.png)
+
+**What broke here:** the temporary-hostname proof worked, but cutting
+the *real* production hostname over took an extra round — the first
+attempt at adding `animal-shelter-workshop.tttaufiqqq.com`'s route
+landed as `asw.tttaufiqqq.com` instead (a naming slip, not a technical
+failure):
+
+![Published application routes on the k3s-asw-nginx tunnel showing the wrong hostname — asw.tttaufiqqq.com — routed to asw-nginx, working but not the actual production domain](images/plan06-cloudflare-published-route-asw-subdomain.png)
+
+`deploy.yml`'s own smoke test asserts against
+`animal-shelter-workshop.tttaufiqqq.com` specifically, so this would
+have silently broken the next CI run. Caught before it did — the correct
+route replaced it:
+
+![Published application routes on the k3s-asw-nginx tunnel, corrected: animal-shelter-workshop.tttaufiqqq.com routed to http://asw-nginx.default.svc.cluster.local:80, the actual production hostname](images/plan06-cloudflare-published-route-production-hostname.png)
+
+`app-server`'s own `cloudflared` was then fully removed (service
+stopped/disabled, package purged, config and binary deleted, systemd
+unit files cleaned up) — not just stopped, since `app-server`'s eventual
+shutdown made "still installed but idle" pointless to leave behind.
+
+**6. The whole loop, proven once, timed, with zero manual steps.** A
+one-line comment change, pushed to `main`: Tests (~15 min, mostly the
+Playwright browser suite) → CI build/push/bump (~1.5 min) → ArgoCD's own
+polled sync (no manual `kubectl`/`argocd` command run at all this time)
+→ new pods `Running` on their pinned nodes → **23m07s** end to end,
+confirmed by `grep`-ing the exact comment text back out of the live
+pod's checked-out source.
+
+**What else broke along the way, found and fixed, not part of the plan's
+original scope:**
+- `.env.testing.example` still pointed 3 of the 5 DB connections at the
+  VMs retired by the earlier VM→CT migration (only 2 of 5 had been
+  updated at the time) — silently undetected because recent pushes had
+  all been docs-only commits, which `tests.yml`'s `paths-ignore` skips
+  entirely. Repointed to the current CTs, and the missing
+  `workshop_2_test` database/user (only `_dev`/`_prod` were carried over
+  in that migration) provisioned fresh on all 3 affected hosts.
+- `linux-gh-runner` had no UFW rule for the actual DB ports on any of the
+  5 DB hosts, only SSH — invisible until the *previous* session's
+  Tailscale-netfilter-bypass fix correctly closed the loophole that had
+  been letting it through by accident. Added an explicit allow rule,
+  same per-host pattern already used for `app-server`/`linux-k3s`.
+- Two booking-procedure tests hardcoded `'2026-08-01'` as a "future"
+  appointment date — real calendar time caught up to it, and the app's
+  own past-date trigger started correctly rejecting it. Switched to
+  `now()->addDay()`.
+- `asw-app`'s default rolling-update strategy (`maxSurge: 25%`) deadlocked
+  on node 1's single CPU core once a 4th (surge) pod tried to schedule
+  alongside 3 running replicas + the Vault injector sidecar, already at
+  ~95% of the core. Fixed with `maxSurge: 0, maxUnavailable: 1` —
+  retire-then-create instead of create-then-retire.
+- `linux-gh-runner`'s 10GB disk filled completely mid-session (Docker
+  build cache/containerd layers from repeated image builds, plus
+  accumulated `_work` checkouts and journal logs) and crashed a Tests
+  run outright (`No space left on device`). Cleared with `docker system
+  prune -af --volumes` (1.85GB), an `apt-get clean`, a
+  `journalctl --vacuum-size=50M`, and removing a stale `_work` checkout —
+  freed back to 2.7GB available. Worth a `df -h` check on this host
+  occasionally; nothing here prunes itself automatically yet.
+- `deploy.yml`'s `deploy-app`/`rollback`/`no-rollback-target` jobs still
+  provisioned and smoke-tested `app-server` directly on every push, even
+  after Stage 5's cloudflared cutover made k3s the real serving path —
+  removed before powering `app-server` off, so CI wouldn't start failing
+  on the very next push. The pre-deploy DB backup step that used to run
+  from `app-server` before touching the 5 DB hosts went with it (it was
+  tied to `app-server`'s own filesystem/Vault Agent config) — not yet
+  re-homed anywhere, tracked as follow-up work rather than papered over
+  with something untested.
 
 ## Where things live
 
@@ -584,7 +717,15 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
 | k3s extra TLS SAN | `/etc/rancher/k3s/config.yaml` (inside CT 100) |
 | Vault kubernetes auth config | `linux-vault`, `auth/kubernetes/*` (live Vault API, not in git) |
 | `asw-app` k8s auth role | `linux-vault`, `auth/kubernetes/role/asw-app` (live Vault API, not in git) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md` |
+| k3s-2 CT (agent node) | Proxmox CT 118, `linux-k3s-2`, Tailscale `100.96.7.52` |
+| k3s-2 Terraform | `proxmox-homelab-taufiq/infrastructure/terraform/homelab-infra.tf` |
+| `asw-app`/`asw-nginx` split manifests | `Animal-Shelter-Workshop/k8s/{deployment,nginx-deployment,service,service-account,nginx-configmap}.yaml` |
+| `cloudflared` k8s auth role | `linux-vault`, `auth/kubernetes/role/cloudflared` (live Vault API, not in git) |
+| `cloudflared` tunnel token | `linux-vault`, `secret/animal-shelter-workshop` field `cloudflare_tunnel_token` (live Vault API, not in git) |
+| `cloudflared` manifest | `Animal-Shelter-Workshop/k8s/cloudflared-deployment.yaml` |
+| CI image build/bump job | `Animal-Shelter-Workshop/.github/workflows/deploy.yml`, `build-and-push-k3s-images` |
+| The plan this continuation executed | `proxmox-homelab-taufiq/plans/06-k3s-multi-node-gitops-automation-plan.md` |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/04-k3s-single-node-deployment-and-vault-injector.md` |
 
 ### Screenshots
 
@@ -593,6 +734,13 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
 - `images/stage5-self-heal-watch.png`, added above (live `kubectl delete`
   + `kubectl get ... -w` catching the whole self-heal cycle, taken by the
   user).
+- `images/plan06-cloudflare-tunnel-route-traffic-form.png`,
+  `images/plan06-cloudflare-tunnels-list.png`,
+  `images/plan06-cloudflare-k3s-tunnel-connected.png`,
+  `images/plan06-cloudflare-published-route-asw-subdomain.png`,
+  `images/plan06-cloudflare-published-route-production-hostname.png` —
+  all added above, the full Cloudflare Tunnel dashboard sequence for the
+  `cloudflared` migration, taken by the user.
 
 Still worth adding next session:
 - The Vault UI's Access → Kubernetes auth method page, showing the

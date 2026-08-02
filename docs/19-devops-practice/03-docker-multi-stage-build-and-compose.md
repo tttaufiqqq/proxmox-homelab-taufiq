@@ -369,7 +369,7 @@ STAGE 4 (docker-compose, local dev)           STAGE 5 (k3s, opening move)
   container with a fresh one automatically, across a whole cluster, not
   just one host.
 - Production credentials never touch `docker-compose.yml` at all — see
-  `docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md`
+  `docs/19-devops-practice/04-k3s-single-node-deployment-and-vault-injector.md`
   for where `workshop_2_prod` actually gets used (k3s, injected live from
   Vault). The two paths are deliberately parallel and non-overlapping: dev
   credentials never touch k3s, prod credentials never touch
@@ -386,7 +386,7 @@ STAGE 4 (docker-compose, local dev)           STAGE 5 (k3s, opening move)
 | Dev DB credentials | `.env` (repo root, gitignored) |
 | Build-context excludes | `.dockerignore` |
 | Registry | `docker.io/tttaufiqqq/animal-shelter-workshop` (`v1.0.0`, `latest`) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/04-docker-multi-stage-build-and-compose.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/03-docker-multi-stage-build-and-compose.md` (homelab meta-repo) |
 
 ### Screenshots
 

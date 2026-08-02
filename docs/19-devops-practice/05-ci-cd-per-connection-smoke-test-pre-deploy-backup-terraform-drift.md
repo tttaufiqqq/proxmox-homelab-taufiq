@@ -308,4 +308,4 @@ grep -n "roles/" .github/workflows/deploy.yml
 | New Vault path/policy/token | `secret/asw-terraform-cd` / `asw-terraform-cd` policy (Vault-side, not in git) |
 | Design docs updated | `docs/07-terraform.md` (CI drift check section), `docs/12-cd.md` (backup + per-connection sections, routing table) |
 | Gitignored ops notes | `CLAUDE.md` (`TF_VAULT_TOKEN` / `secret/asw-terraform-cd` section) |
-| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/03-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md` (homelab meta-repo) |
+| This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/05-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md` (homelab meta-repo) |

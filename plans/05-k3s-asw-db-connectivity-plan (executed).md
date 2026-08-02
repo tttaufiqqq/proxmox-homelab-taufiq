@@ -5,7 +5,7 @@ Stage 5 of `devops-practice-plan.md`) to the real 5-connection database
 fleet, replacing the demo-only `DBn_HOST` placeholders in
 `asw-app-config`. This was the "later, harder step" both Stage 5's and
 Stage 4's writeups explicitly deferred — see
-`docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md`'s
+`docs/19-devops-practice/04-k3s-single-node-deployment-and-vault-injector.md`'s
 own "What carries forward" section, which used to say *"Wiring the app's
 actual 5-connection DB credentials through the injector is future work,
 not done here."* — now done, and that doc's own text reflects it.

@@ -56,9 +56,9 @@ docs that are now folded into it rather than kept as separate reading.
 |---|---|---|
 | 01 | [Terraform: VM/CT creation, fleet import, and pipeline automation](01-terraform-vm-ct-creation-fleet-import-and-automation.md) | Stage 1, all iterations |
 | 02 | [Ansible: roles, idempotency, Molecule, fleet expansion](02-ansible-roles-idempotency-molecule-vault-and-fleet-expansion.md) | Stage 2 |
-| 03 | [CI/CD: per-connection smoke test, pre-deploy backup, drift check](03-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md) | Stage 3 |
-| 04 | [Docker: multi-stage build and compose](04-docker-multi-stage-build-and-compose.md) | Stage 4 |
-| 05 | [k3s: single-node deployment and Vault injector](05-k3s-single-node-deployment-and-vault-injector.md) | Stage 5 |
+| 03 | [Docker: multi-stage build and compose](03-docker-multi-stage-build-and-compose.md) | Stage 4 |
+| 04 | [k3s: single-node deployment and Vault injector](04-k3s-single-node-deployment-and-vault-injector.md) | Stage 5 |
+| 05 | [CI/CD: per-connection smoke test, pre-deploy backup, drift check](05-ci-cd-per-connection-smoke-test-pre-deploy-backup-terraform-drift.md) | Stage 3 |
 | 06 | [Observability: Prometheus, Grafana, Loki, Alertmanager](06-observability-prometheus-grafana-loki-alertmanager.md) | Stage 6 |
 | 07 | [GitOps: ArgoCD auto-sync and drift-revert](07-gitops-argocd-auto-sync-and-drift-revert.md) | Stage 7 |
 | 08 | [Azure: offsite backup sync and budget guardrail](08-azure-cloud-backup-sync.md) | Stage 8, Steps 1-2 |

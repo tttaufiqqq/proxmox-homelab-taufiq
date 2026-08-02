@@ -80,6 +80,81 @@ resource "proxmox_virtual_environment_container" "linux_k3s" {
   timeout_update = 1800
 }
 
+resource "proxmox_virtual_environment_container" "linux_k3s_2" {
+  # k3s agent node (worker only, no control-plane role) — see
+  # plans/06-k3s-multi-node-gitops-automation-plan.md Stage 1. Same
+  # "start small" sizing discipline as linux_k3s itself.
+  node_name     = var.proxmox_node
+  vm_id         = 118
+  unprivileged  = true
+  started       = true
+  start_on_boot = true
+
+  cpu {
+    cores = 1
+  }
+
+  memory {
+    dedicated = 2048
+    swap      = 768
+  }
+
+  disk {
+    datastore_id = "local"
+    size         = 8
+  }
+
+  network_interface {
+    name     = "eth0"
+    bridge   = "vmbr0"
+    vlan_id  = 30
+    firewall = true
+  }
+
+  initialization {
+    hostname = "linux-k3s-2"
+
+    dns {
+      servers = ["8.8.8.8"]
+    }
+
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+  }
+
+  console {
+    enabled   = true
+    tty_count = 2
+    type      = "tty"
+  }
+
+  features {
+    # keyctl deliberately omitted here — the automation API token can't set
+    # feature flags other than nesting on container create (HTTP 403,
+    # "changing feature flags (except nesting) is only allowed for
+    # root@pam"). Added post-creation via `pct set` over root SSH instead
+    # (not restricted the same way), matching linux_k3s's own real config.
+    nesting = true
+  }
+
+  operating_system {
+    template_file_id = "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+    type              = "ubuntu"
+  }
+
+  lifecycle {
+    ignore_changes = [operating_system, features]
+  }
+
+  timeout_clone  = 1800
+  timeout_create = 1800
+  timeout_delete = 60
+  timeout_update = 1800
+}
+
 resource "proxmox_virtual_environment_container" "linux_observability" {
   node_name     = var.proxmox_node
   vm_id         = 114
