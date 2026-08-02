@@ -81,11 +81,33 @@ kubectl -n argocd patch secret argocd-secret \
 | Service URL | `argocd-server.argocd.svc.cluster.local:443` |
 | No TLS Verify | **On** |
 
+- Hit a real snag saving the route the first two tries — a leftover
+  stale validation error banner from an earlier attempt kept reappearing
+  even after the form's own fields looked correct, because the URL field
+  had briefly picked up a literal `https://` prefix (the `://` icon in
+  front of the URL box already supplies the scheme, so typing it again
+  produces `parse "https:// argocd-server...": invalid character`):
+
+![Cloudflare Tunnel "Add a published application route" form showing a red error banner: Bad Configuration, Validation failed, parse "https:// argocd-server.argocd.svc.cluster.local:443": invalid character quote in host name — despite the visible Subdomain/URL fields already looking correct](images/15-cloudflare-route-tls-parse-error.png)
+
+- Clearing the URL field and retyping it manually (no leading `https://`)
+  fixed the parse error and the DNS record + route both saved.
 - **No TLS Verify** is required because ArgoCD's origin cert is
   self-signed (its SANs cover `argocd-server.argocd.svc.cluster.local`
   correctly, but the issuing CA isn't one `cloudflared` trusts by
-  default) — without it the route 502'd even though DNS and the route
-  itself were configured correctly.
+  default) — without it the route saved fine but every request 502'd.
+  The toggle lives one level deeper than it looks, behind the collapsed
+  **"Origin request and connection settings"** expander on the route's
+  edit page:
+
+![Cloudflare "Edit published application route" page for the argocd-webhook route, Hostname and Service sections visible (Type HTTPS, URL argocd-server.argocd.svc.cluster.local:443), with the "Origin request and connection settings" section still collapsed below — this is where the No TLS Verify toggle actually lives](images/15-cloudflare-route-edit-origin-settings.png)
+
+- With both fixed, the route showed up correctly alongside the
+  pre-existing `asw-nginx` route from doc 11, no error banner, service
+  URLs both visible:
+
+![Cloudflare Tunnel "Published application routes" list for k3s-asw-nginx, two rows: animal-shelter-workshop.tttaufiqqq.com to http://asw-nginx.default.svc.cluster.local:80, and argocd-webhook.tttaufiqqq.com to https://argocd-server.argocd.svc.cluster.local:443 — both routes on the same tunnel, catch-all rule http_status:404 for anything else](images/15-cloudflare-published-routes-both.png)
+
 - Confirms the same principle doc 07 already established for
   `asw-nginx`: exposing something publicly through this tunnel is just
   another hostname route, no new public port opened, no second tunnel to
