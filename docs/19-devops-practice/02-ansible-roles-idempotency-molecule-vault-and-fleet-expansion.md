@@ -3,7 +3,7 @@
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
-# Stage 2, Ansible Roles, Idempotency, Molecule, Vault, and Fleet Expansion
+# Ansible Roles, Idempotency, Molecule, Vault, and Fleet Expansion
 
 **Date:** 2026-07-26
 **Repo the actual code/infra changes live in:** `Animal-Shelter-Workshop`

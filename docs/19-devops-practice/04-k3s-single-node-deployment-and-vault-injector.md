@@ -3,7 +3,7 @@
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
-# Stage 5, Kubernetes (k3s)
+# Kubernetes (k3s)
 
 **Date:** 2026-07-26
 **Repo the actual code/infra changes live in:** `Animal-Shelter-Workshop`

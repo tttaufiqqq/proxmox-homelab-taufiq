@@ -3,7 +3,7 @@
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
-# Stage 8, Step 4 (stretch), Terraform Talking to a Second Provider
+# Terraform Talking to a Second Provider
 
 **Date:** 2026-07-26/27
 **Repo the actual code lives in:** `Animal-Shelter-Workshop`,

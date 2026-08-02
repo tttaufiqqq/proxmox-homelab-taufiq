@@ -3,7 +3,7 @@
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
-# Stage 8, Step 3, Azure Functions Reading Vault Through Tailscale Funnel
+# Azure Functions Reading Vault Through Tailscale Funnel
 
 **Date:** 2026-07-26/27
 

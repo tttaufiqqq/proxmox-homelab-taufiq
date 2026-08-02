@@ -66,6 +66,8 @@ docs that are now folded into it rather than kept as separate reading.
 | 10 | [Azure: Terraform talking to a second provider](10-terraform-azurerm-stretch-goal.md) | Stage 8, Step 4 (stretch) |
 | 11 | [Terraform: bringing the rest of the fleet in](11-terraform-full-fleet-import.md) | Stage 1 (continued again) — full narrative detail behind doc 01 |
 | 12 | [Terraform: proving CT creation, and the full loop end to end](12-terraform-ct-creation-and-full-loop-proof.md) | Stage 1 (continued once more) — full narrative detail behind doc 01 |
+| 13 | [k3s production cutover: a 3rd node, the rest of the secrets, and a real soak test](13-k3s-production-cutover-and-soak-test.md) | plan 07 |
+| 14 | [Bringing k3s into fleet-wide monitoring](14-k3s-monitoring-and-log-persistence.md) | Stage 6 (continued) |
 
 ## Where each doc sits on the loop
 

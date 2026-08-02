@@ -3,7 +3,7 @@
      Date below is provisional (the date this actually happened); revisit
      once final sequencing/dating is decided. -->
 
-# Stage 7, GitOps (ArgoCD)
+# GitOps (ArgoCD)
 
 **Date:** 2026-07-26/27
 **Repo the actual manifests live in:** `Animal-Shelter-Workshop` (`k8s/`,
