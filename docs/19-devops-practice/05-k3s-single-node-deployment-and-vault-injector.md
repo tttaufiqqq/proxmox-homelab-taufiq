@@ -33,10 +33,10 @@ STAGE 4 (docker-compose, one host)         STAGE 5 (k3s, one CT so far)
 │  you restart it by hand  │      ──▶       │   the Deployment          │
 │  if a container dies     │                │   restarts it for you    │
 └─────────────────────────┘                └─────────────────────────┘
-   1 app container                            2 app Pod replicas,
+   1 app container                            3 app Pod replicas,
    1 nginx container                           each still app+nginx,
-   1 local mysql (throwaway)                   no DB container at all,
-                                                 DB wiring stays deferred
+   local .env dev credentials                  real 5-connection DB creds
+                                                 injected live from Vault
 ```
 
 - The real 5-database fleet is untouched either way, same as Stage 4,
@@ -227,13 +227,11 @@ kubectl delete pod asw-app-794dcdd558-9flmq
   non-secret (`APP_NAME`, `APP_ENV`, `DB_CONNECTION=sqlite`,
   `SESSION_DRIVER`, etc.) into `asw-app-config`, just `APP_KEY` into
   `asw-app-secret`.
-- `APP_KEY` is the same local/dev-only value already sitting in
-  plaintext in Stage 4's committed `docker-compose.yml`, not a real
-  secret, kept as plain `stringData` for the same reason that file
-  does.
-- DB config stays exactly where Stage 4 left it (sqlite, no real
-  connections); wiring the real 5-connection setup into k3s is
-  explicitly a later, harder step per the plan, not this one.
+- The real production `DB1-5_HOST/PORT/DATABASE/USERNAME` values now live
+  as plain literals in `asw-app-config` (not secret on their own, same
+  values `env-app.j2` already renders for the bare-metal deploy) —
+  `DB1-5_PASSWORD` and the real `APP_KEY` come from Vault instead (see
+  step 7 below), never from this ConfigMap/Secret.
 ```
 kubectl apply -f k8s/app-configmap.yaml -f k8s/app-secret.yaml -f k8s/deployment.yaml
 kubectl rollout status deployment/asw-app   # successfully rolled out
@@ -290,6 +288,66 @@ kubectl exec vault-demo -c app -- cat /vault/secrets/hello.txt
 vault-agent-injector-works
 ```
 
+**Wired the app's own real credentials through the same injector,** past
+the demo Pod above: a **new** Kubernetes-auth role, `asw-app`, bound to a
+**new** `asw-app` ServiceAccount (`k8s/service-account.yaml`) — pointed at
+the **same** `asw-deploy` policy the Ansible AppRole deploy already uses
+(`docs/11-vault-approle-app-integration`), scoped read-only to
+`secret/animal-shelter-workshop`. One secret, two independent auth paths
+(AppRole for Ansible, Kubernetes auth for this cluster), same policy, same
+blast radius:
+```
+vault write auth/kubernetes/role/asw-app \
+  bound_service_account_names=asw-app \
+  bound_service_account_namespaces=default \
+  policies=asw-deploy ttl=1h
+```
+- The Deployment's pod template carries the same style of annotations as
+  the demo above, but templating a small `export KEY="value"` file from
+  `secret/data/animal-shelter-workshop`'s `db_password` and `app_key`
+  fields to `/vault/secrets/db.env`.
+- **The one real wrinkle:** the Injector only writes to a shared file, it
+  can't inject directly into another container's process environment.
+  Solved the same way the bare-metal Vault Agent setup already solved
+  this exact problem (`docs/11-vault-approle-app-integration`'s "Vault
+  Agent — secrets stopped touching disk at runtime too" section) —
+  override the `app` container's `command`/`args` to
+  `sh -c ". /vault/secrets/db.env && exec php-fpm"`, sourcing the
+  rendered file into the shell's environment before `exec`'ing PHP-FPM,
+  so the env vars are already present in `php-fpm`'s process image at
+  startup. No changes needed to the Docker image itself.
+- **This cluster is GitOps-managed (Stage 7, ArgoCD, `selfHeal: true`)** —
+  a real gotcha hit applying this: `kubectl apply` against the live
+  cluster appeared to work (pods briefly picked up the new config), but
+  ArgoCD reverted it within seconds, since the change only existed in the
+  local working copy, not in git. Manifests have to be committed and
+  pushed to `main` for ArgoCD to adopt them; `kubectl apply` directly
+  against a GitOps-managed cluster is a no-op against a healthy sync loop,
+  not a shortcut around it. Forced an immediate re-sync instead of waiting
+  for the default poll interval:
+```
+kubectl -n argocd patch application animal-shelter-workshop --type merge \
+  -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+```
+```
+kubectl exec <asw-app-pod> -c app -- cat /vault/secrets/db.env
+# export APP_KEY="base64:4CcU+..."
+# export DB1_PASSWORD="workshop_2_prod"   (and DB2-5)
+
+curl http://100.109.241.125:30080/api/database-status
+# "allOnline": true, all 5 connections connected:true
+```
+- Confirmed through the real running app end-to-end, not just that the
+  Injector wrote a file — the same standard this stage's original
+  verification already held itself to.
+- Local dev (`docker-compose.yml`) reaches the same 5 real databases too,
+  but with a separate `workshop_2_dev` credential straight from a plain
+  `.env` file, never Vault, never this Deployment's config. Full detail:
+  `docs/19-devops-practice/04-docker-multi-stage-build-and-compose.md`.
+  The two paths are deliberately parallel and non-overlapping: dev
+  credentials never touch k3s, prod credentials never touch
+  `docker-compose.yml`.
+
 ### 8. Expand to 2+ nodes, deferred, documented (not a gap)
 
 - The plan's own capacity note anticipates this: expanding k3s to
@@ -338,18 +396,17 @@ kubectl drain linux-k3s --ignore-daemonsets --delete-emptydir-data --force
 
 ## What I found
 
-- **Graceful degradation carries over into k3s, unchanged.** None of
-  the 5 real database connections are wired up here at all
-  (`DB_CONNECTION=sqlite` is the only DB config in `asw-app-config`,
-  deliberately, per this stage's own scope).
-- So the homepage shows `0/5 databases online`, not Stage 4's `1/5`
-  (that one had `shelter` wired to a local test MySQL container).
-- The same `HandleDatabaseFailures`/`InjectDatabaseStatus` middleware
-  Stage 4 already proved still renders the page underneath instead of a
-  500, with a "Continue Anyway" escape hatch.
-- This confirms this behavior isn't specific to Docker Compose, it's
-  the app itself, and it survives unchanged into a Kubernetes
-  Deployment with zero extra work.
+- **Graceful degradation carries over into k3s, unchanged.** Proven while
+  no DB connections were wired up yet (`DB_CONNECTION=sqlite` was the only
+  DB config in `asw-app-config` at the time) — the homepage showed
+  `0/5 databases online`, and the same `HandleDatabaseFailures`/
+  `InjectDatabaseStatus` middleware Stage 4 already proved still rendered
+  the page underneath instead of a 500, with a "Continue Anyway" escape
+  hatch. Confirmed this behavior isn't specific to Docker Compose, it's
+  the app itself, and it survives unchanged into a Kubernetes Deployment
+  with zero extra work. (All 5 connections are wired for real now — see
+  step 7 above — but the app's own resilience here is worth keeping on
+  record independent of that.)
 
 ![Animal Shelter Workshop homepage through the k3s NodePort Service, with the app's own "Database Connection Notice" modal open showing 0/5 databases online (Users, Reporting, Animals, Shelter, Booking all OFFLINE), homepage still rendered blurred underneath, "Continue Anyway" button available](images/stage5-database-status-notice.png)
 
@@ -474,6 +531,13 @@ kubectl exec deploy/asw-app -c app -- env | grep APP_NAME
 ```bash
 kubectl exec vault-demo -c app -- cat /vault/secrets/hello.txt
 # vault-agent-injector-works
+
+# the real app's own credentials, injected the same way:
+kubectl exec <asw-app-pod> -c app -- cat /vault/secrets/db.env
+# export APP_KEY="base64:..."   export DB1_PASSWORD="workshop_2_prod"  (and DB2-5)
+
+curl http://100.109.241.125:30080/api/database-status
+# "allOnline": true, all 5 connections connected:true
 ```
 
 **9. Taints / draining**
@@ -502,11 +566,11 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
   durable deliverable, Stage 7 (GitOps) points ArgoCD at exactly this
   directory, per the plan's own instruction, rather than a separate repo.
 - The Vault Kubernetes auth method, the `asw-k8s-demo` policy/role, and the
-  injector installation are all real and will carry forward, but the
+  injector installation are all real and carry forward — proven with the
   demo secret path (`secret/k3s-demo`) and the `vault-demo` Pod/
-  ServiceAccount were exploratory scaffolding for this stage only, not
-  wired to the app's real config yet. Wiring the app's actual 5-connection
-  DB credentials through the injector is future work, not done here.
+  ServiceAccount first, then reused for real by the app's own
+  `asw-app` role/ServiceAccount, both wired to the app's real config now
+  (step 7 above), not just exploratory scaffolding.
 - Multi-node expansion and its downstream scheduling practice
   (taints/tolerations/draining beyond what a single node can show) stay
   blocked on a second physical Proxmox host, tracked, not forgotten.
@@ -519,6 +583,7 @@ ssh proxmox "pct exec 100 -- curl -s -o /dev/null -w '%{http_code}\n' http://loc
 | k3s CT | Proxmox CT 100, `linux-k3s`, Tailscale `100.109.241.125` |
 | k3s extra TLS SAN | `/etc/rancher/k3s/config.yaml` (inside CT 100) |
 | Vault kubernetes auth config | `linux-vault`, `auth/kubernetes/*` (live Vault API, not in git) |
+| `asw-app` k8s auth role | `linux-vault`, `auth/kubernetes/role/asw-app` (live Vault API, not in git) |
 | This write-up | `proxmox-homelab-taufiq/docs/19-devops-practice/05-k3s-single-node-deployment-and-vault-injector.md` |
 
 ### Screenshots

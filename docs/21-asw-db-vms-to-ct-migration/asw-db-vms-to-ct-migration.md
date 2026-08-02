@@ -292,3 +292,32 @@ the whole-host snapshot is directional/corroborating, not the exact figure.
   for now as a rollback net (`production-vms.tf`'s "do not destroy"
   comment is untouched); revisit once the three new CTs have run stable
   for a while.
+
+## Known gap: this migration only ever carried `workshop_2_prod`
+
+Found while wiring `docker-compose.yml`'s local dev environment to all 5
+real DB connections (`docs/19-devops-practice/04`): this migration's
+per-database dump/restore only ever moved `workshop_2_prod` — the
+separate `workshop_2_dev` database/user each of these 3 hosts also
+carried (used by local development, see `Animal-Shelter-Workshop/.env`)
+was never part of the plan's scope and didn't come along. `animals`/
+`booking` (the 2 real connections on hosts this migration never touched)
+still had their dev accounts intact the whole time; only the 3 migrated
+hosts (`linux-mysql`, `linux-mariadb`, `linux-postgres`) were missing
+theirs.
+
+Not a bug in this migration — `workshop_2_dev` was simply never in scope
+for a migration whose entire point was reclaiming RAM from the production
+path — but worth recording as a gap this kind of migration should check
+for next time: **when moving a database host, verify every account on it
+that matters, not just the one the migration was scoped around.**
+
+Fixed by creating `workshop_2_dev` fresh on the 3 CTs and running the
+app's own migrations against them (full detail in
+`docs/19-devops-practice/04`, since that's where the actual work
+happened) — recovering the *shape* of the old dev schema via the
+migrations that built it originally, not a dump/restore of the old VMs'
+actual dev data (the old VMs' Tailscale identities had already been
+deleted as part of this migration's own hostname-reclaim step, and reviving
+one for a raw LAN/console recovery wasn't worth it for schema-only, no-real-data
+dev databases in a lab with no production users).
