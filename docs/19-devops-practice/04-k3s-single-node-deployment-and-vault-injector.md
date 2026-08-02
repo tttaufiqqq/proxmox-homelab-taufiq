@@ -607,6 +607,8 @@ switched from `127.0.0.1:9000` to a real ClusterIP Service
 pinned each Deployment explicitly, rather than trusting the scheduler to
 keep them apart.
 
+![Diagram of the 2-node k3s cluster: Node 1 (control-plane) running asw-app (php-fpm), Node 2 (agent) running the cloudflared k3s-asw-nginx tunnel and asw-nginx (static assets compiled), with the request flow arrows external requests → cloudflared → asw-nginx → asw-app, the only cross-node hop being asw-nginx to asw-app via the asw-app-internal ClusterIP Service. Part 1 of 2 — part 2 lands once a 3rd node is added for ArgoCD/observability.](images/plan06-k3s-cluster-node-split-diagram-part1.png)
+
 **3. A real cross-node failover test, not simulated on one node.**
 `kubectl delete pod` on an `asw-nginx` pod running on node 2 produced a
 replacement, still correctly pinned to node 2, within single-digit
