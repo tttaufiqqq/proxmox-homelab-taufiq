@@ -230,6 +230,19 @@ scenario-file typo:
     `listen_addresses '*'`).
   - Tailscale and UFW are the actual security boundary everywhere else,
     and an enumerated IP list is exactly what went stale here.
+  - **Correction (found later, `plans/05-k3s-asw-db-connectivity-plan
+    (executed).md`):** on the 5 DB hosts, UFW wasn't actually enforcing
+    anything — Tailscale's own netfilter management inserts a `ts-input`
+    iptables chain ahead of ufw's chains that unconditionally accepts all
+    `tailscale0` traffic, so every `from_ip`-scoped UFW rule on those
+    hosts was a silent no-op from the day this role was written until
+    that plan's verification pass caught it and fixed it with
+    `tailscale set --netfilter-mode=off`. This is a default Tailscale
+    behavior, not something specific to the `db_firewall` role, so the
+    same bypass plausibly affects every other Tailscale-joined,
+    UFW-protected host in this homelab (`linux-vault`, `linux-gh-runner`,
+    this `linux-mongodb` host included) — **not yet checked**, flagged
+    here rather than assumed fixed.
   - Verified `mongod` active and listening on `0.0.0.0:27017` afterward;
     second run confirmed `changed=0`.
 
